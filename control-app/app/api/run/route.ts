@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { runIrrigation } from "@/lib/irrigation";
-import { logEvent } from "@/lib/db";
+import { logEvent, isSystemEnabled } from "@/lib/db";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -8,6 +8,12 @@ export const dynamic = "force-dynamic";
 // POST /api/run { duration_minutes, triggered_by, et0?, soil_avg?, weather_snapshot? }
 // Runs the full ON sequence (valve -> 7s -> pump). Open endpoint (brain calls it).
 export async function POST(req: NextRequest) {
+  if (!isSystemEnabled()) {
+    return NextResponse.json(
+      { error: "Sistem dinonaktifkan (system_enabled=0)." },
+      { status: 409 }
+    );
+  }
   const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
   const duration = Number(body.duration_minutes);
   const triggeredBy =

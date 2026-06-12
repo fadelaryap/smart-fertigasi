@@ -141,6 +141,34 @@ export async function setPowerState(
   }
 }
 
+// Connectivity test: performs a REAL getDevices (read-only, never toggles a
+// relay) regardless of DRY_RUN, so the UI "Test eWeLink" button can verify the
+// account/credentials and list devices even while dry-run is on.
+export async function testConnection(): Promise<{
+  ok: boolean;
+  count?: number;
+  devices?: { deviceid: string; name?: string; online?: boolean; switches?: unknown }[];
+  error?: string;
+}> {
+  try {
+    const devices = await getConnection().getDevices();
+    const list = Array.isArray(devices) ? devices : [];
+    return {
+      ok: true,
+      count: list.length,
+      devices: list.map((d: any) => ({
+        deviceid: d.deviceid,
+        name: d.name,
+        online: d.online,
+        switches: d?.params?.switches ?? d?.params?.switch,
+      })),
+    };
+  } catch (err) {
+    resetConnection();
+    return { ok: false, error: String(err) };
+  }
+}
+
 // Verify a channel reached the expected state, retrying a few times before
 // giving up. Returns true on match, false if still mismatched after all retries.
 // Callers decide whether a false result warrants a Telegram notification.

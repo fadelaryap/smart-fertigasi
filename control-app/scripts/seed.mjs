@@ -49,6 +49,7 @@ if (schedCount === 0) {
 
 // --- 4. Settings (single-value; secrets like eWeLink creds stay in .env) -----
 const settingsDefaults = {
+  system_enabled: "1",
   pump_delay_on_seconds: "7",
   pump_delay_off_seconds: "0",
   safety_max_minutes: "60",

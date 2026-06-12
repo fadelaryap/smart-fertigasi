@@ -5,7 +5,7 @@
 // The OS-cron watchdog stays SEPARATE and independent — this scheduler only
 // TRIGGERS watering; shutoff is driven by expected_off_at + watchdog.
 import cron, { type ScheduledTask } from "node-cron";
-import { getDb, logEvent } from "./db";
+import { getDb, logEvent, isSystemEnabled } from "./db";
 import { spawnBrain } from "./brain";
 
 interface ScheduleRow {
@@ -60,6 +60,10 @@ export function reloadSchedules(): SchedulerStatus {
       expr,
       () => {
         logEvent("info", "schedule_fired", { id: r.id, time: r.time, tz });
+        if (!isSystemEnabled()) {
+          logEvent("warn", "system_disabled_skip", { id: r.id, time: r.time });
+          return;
+        }
         spawnBrain("schedule");
       },
       { timezone: tz }

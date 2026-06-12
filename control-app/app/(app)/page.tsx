@@ -1,6 +1,6 @@
-import { getDb } from "@/lib/db";
+import { getDb, isSystemEnabled } from "@/lib/db";
 import { isDryRun } from "@/lib/ewelink";
-import { runNowAction, stopRunAction } from "./actions";
+import { runNowAction, stopRunAction, toggleSystemAction } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -37,17 +37,60 @@ export default function Dashboard() {
   const runningRunIds = [...new Set(active.map((c) => c.run_id))].filter(
     (x): x is number => x != null
   );
+  const enabled = isSystemEnabled();
+  const lastRun = runs[0];
+  const lastEvent = db
+    .prepare("SELECT ts, level, event FROM event_log ORDER BY id DESC LIMIT 1")
+    .get() as { ts: string; level: string; event: string } | undefined;
 
   return (
     <>
-      <div className="panel" style={{ display: "flex", alignItems: "center", gap: 16 }}>
+      <div className="panel" style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
         <h1 style={{ margin: 0 }}>Dashboard</h1>
-        <span className={`badge ${isDryRun() ? "off" : "on"}`}>
-          {isDryRun() ? "DRY-RUN (relay tidak dipicu)" : "LIVE (relay aktif)"}
+        <span
+          className={`badge ${enabled ? "on" : "off"}`}
+          style={enabled ? {} : { color: "var(--danger)" }}
+        >
+          {enabled ? "SISTEM AKTIF" : "SISTEM NONAKTIF"}
         </span>
-        <form action={runNowAction} style={{ marginLeft: "auto" }}>
-          <button type="submit">▶ Run now (manual)</button>
+        <span className={`badge ${isDryRun() ? "off" : "on"}`}>
+          {isDryRun() ? "DRY-RUN" : "LIVE"}
+        </span>
+        <form action={toggleSystemAction} style={{ marginLeft: "auto" }}>
+          <button type="submit" className={enabled ? "danger" : ""}>
+            {enabled ? "■ Nonaktifkan sistem" : "▶ Aktifkan sistem"}
+          </button>
         </form>
+        <form action={runNowAction}>
+          <button type="submit" disabled={!enabled}>
+            ▶ Run now
+          </button>
+        </form>
+      </div>
+
+      <div className="panel">
+        <h2 style={{ marginTop: 0 }}>Status terakhir</h2>
+        {lastRun ? (
+          <p style={{ margin: "4px 0" }}>
+            Run #{lastRun.id} ·{" "}
+            <span
+              className={`badge ${lastRun.status === "completed" || lastRun.status === "running" ? "on" : "off"}`}
+            >
+              {lastRun.status}
+            </span>{" "}
+            · {lastRun.triggered_by} · mulai {lastRun.started_at ?? "—"}
+            {lastRun.duration_minutes != null ? ` · ${lastRun.duration_minutes} mnt` : ""}
+            {lastRun.et0 != null ? ` · ET0 ${lastRun.et0.toFixed(3)}` : ""}
+            {lastRun.soil_avg != null ? ` · soil ${lastRun.soil_avg.toFixed(1)}%` : ""}
+          </p>
+        ) : (
+          <p className="muted">Belum ada run.</p>
+        )}
+        {lastEvent && (
+          <p className="muted" style={{ margin: "4px 0" }}>
+            Aktivitas terakhir: [{lastEvent.level}] {lastEvent.event} · {lastEvent.ts}
+          </p>
+        )}
       </div>
 
       <div className="panel">

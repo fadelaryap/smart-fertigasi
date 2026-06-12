@@ -52,6 +52,12 @@ export function setSetting(key: string, value: string): void {
     .run(key, value);
 }
 
+// Master switch. Default ON (anything other than "0" is enabled). When OFF, no
+// NEW watering starts — but the watchdog still runs and still turns valves off.
+export function isSystemEnabled(): boolean {
+  return getSetting("system_enabled") !== "0";
+}
+
 export type EventLevel = "info" | "warn" | "error";
 
 export function logEvent(

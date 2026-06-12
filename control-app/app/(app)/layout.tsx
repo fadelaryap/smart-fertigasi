@@ -11,6 +11,7 @@ const NAV = [
   ["/devices", "Device"],
   ["/fuzzy", "Fuzzy"],
   ["/settings", "Settings"],
+  ["/diagnostics", "Diagnostics"],
   ["/logs", "Logs"],
 ];
 

@@ -11,7 +11,7 @@
 //  - Duration is clamped to safety_max_minutes here (defense in depth); the
 //    watchdog enforces the absolute safety cutoff independently.
 //  - Every ON/OFF is verified (with retry). Mismatch -> Telegram + event_log.
-import { getDb, getSetting, logEvent } from "./db";
+import { getDb, getSetting, logEvent, isSystemEnabled } from "./db";
 import { setPowerState, verifyState, isDryRun } from "./ewelink";
 import { sendTelegram } from "./telegram";
 import { nowIso, isoPlusMinutes } from "./time";
@@ -53,6 +53,9 @@ const stopping = new Set<number>();
 
 // --- ON sequence -------------------------------------------------------------
 export async function runIrrigation(p: RunParams) {
+  if (!isSystemEnabled()) {
+    throw new Error("Sistem dinonaktifkan (system_enabled=0) — penyiraman tidak dijalankan.");
+  }
   const db = getDb();
   const valves = db
     .prepare(
