@@ -1,0 +1,32 @@
+# Secrets — NEVER commit
+.env
+.env.local
+*.env
+
+# Node
+node_modules/
+control-app/.next/
+control-app/out/
+control-app/next-env.d.ts
+npm-debug.log*
+
+# Python
+.venv/
+venv/
+__pycache__/
+*.pyc
+
+# SQLite database + WAL sidecar files (local VPS state, not source)
+db/*.db
+db/*.db-wal
+db/*.db-shm
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Local Claude Code settings (personal, not shared)
+.claude/settings.local.json

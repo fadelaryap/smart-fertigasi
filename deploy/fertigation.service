@@ -1,0 +1,28 @@
+# systemd unit for the Control App. (Use EITHER systemd or PM2, not both.)
+#
+#   sudo cp deploy/fertigation.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now fertigation
+#   systemctl status fertigation
+#   journalctl -u fertigation -f
+#
+# Auto-restart keeps the Control App alive so the watchdog can always reach
+# /api/stop (eWeLink control is centralized here).
+
+[Unit]
+Description=AgriHub Fertigation Control App (Next.js)
+After=network.target
+
+[Service]
+Type=simple
+User=fertigation
+WorkingDirectory=/opt/agrihub-fertigation/control-app
+Environment=NODE_ENV=production
+Environment=PORT=4500
+# The app loads the root .env itself; no need to list secrets here.
+ExecStart=/usr/bin/npm start
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
