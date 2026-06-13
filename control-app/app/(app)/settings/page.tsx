@@ -1,4 +1,5 @@
 import { getDb } from "@/lib/db";
+import { toWIB } from "@/lib/time";
 import { updateSettings } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -163,7 +164,7 @@ function Subscribers() {
               <th>Username</th>
               <th>chat_id</th>
               <th>Status</th>
-              <th>Sejak (UTC)</th>
+              <th>Sejak (WIB)</th>
             </tr>
           </thead>
           <tbody>
@@ -177,7 +178,7 @@ function Subscribers() {
                     {sub.active ? "aktif" : "berhenti"}
                   </span>
                 </td>
-                <td>{sub.subscribed_at}</td>
+                <td>{toWIB(sub.subscribed_at)}</td>
               </tr>
             ))}
           </tbody>

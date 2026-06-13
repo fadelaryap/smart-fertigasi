@@ -1,5 +1,6 @@
 import { getDb, isSystemEnabled } from "@/lib/db";
 import { isDryRun } from "@/lib/ewelink";
+import { toWIB } from "@/lib/time";
 import { runNowAction, stopRunAction, toggleSystemAction } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -78,7 +79,7 @@ export default function Dashboard() {
             >
               {lastRun.status}
             </span>{" "}
-            · {lastRun.triggered_by} · mulai {lastRun.started_at ?? "—"}
+            · {lastRun.triggered_by} · mulai {toWIB(lastRun.started_at)}
             {lastRun.duration_minutes != null ? ` · ${lastRun.duration_minutes} mnt` : ""}
             {lastRun.et0 != null ? ` · ET0 ${lastRun.et0.toFixed(3)}` : ""}
             {lastRun.soil_avg != null ? ` · soil ${lastRun.soil_avg.toFixed(1)}%` : ""}
@@ -88,7 +89,7 @@ export default function Dashboard() {
         )}
         {lastEvent && (
           <p className="muted" style={{ margin: "4px 0" }}>
-            Aktivitas terakhir: [{lastEvent.level}] {lastEvent.event} · {lastEvent.ts}
+            Aktivitas terakhir: [{lastEvent.level}] {lastEvent.event} · {toWIB(lastEvent.ts)}
           </p>
         )}
       </div>
@@ -105,8 +106,8 @@ export default function Dashboard() {
                 <th>Device</th>
                 <th>Ch</th>
                 <th>Role</th>
-                <th>On at (UTC)</th>
-                <th>Expected off (UTC)</th>
+                <th>On at (WIB)</th>
+                <th>Expected off (WIB)</th>
                 <th>Verified</th>
               </tr>
             </thead>
@@ -117,8 +118,8 @@ export default function Dashboard() {
                   <td>{c.device_id}</td>
                   <td>{c.channel}</td>
                   <td>{c.role}</td>
-                  <td>{c.on_at}</td>
-                  <td>{c.expected_off_at}</td>
+                  <td>{toWIB(c.on_at)}</td>
+                  <td>{toWIB(c.expected_off_at)}</td>
                   <td>{c.verified ? "✓" : "—"}</td>
                 </tr>
               ))}
@@ -146,7 +147,7 @@ export default function Dashboard() {
             <tr>
               <th>ID</th>
               <th>Trigger</th>
-              <th>Mulai (UTC)</th>
+              <th>Mulai (WIB)</th>
               <th>Durasi</th>
               <th>Status</th>
               <th>ET0</th>
@@ -159,7 +160,7 @@ export default function Dashboard() {
               <tr key={r.id}>
                 <td>{r.id}</td>
                 <td>{r.triggered_by}</td>
-                <td>{r.started_at}</td>
+                <td>{toWIB(r.started_at)}</td>
                 <td>{r.duration_minutes != null ? `${r.duration_minutes} mnt` : "—"}</td>
                 <td>
                   <span
@@ -170,7 +171,7 @@ export default function Dashboard() {
                 </td>
                 <td>{r.et0 != null ? r.et0.toFixed(3) : "—"}</td>
                 <td>{r.soil_avg != null ? r.soil_avg.toFixed(1) : "—"}</td>
-                <td>{r.finished_at ?? "—"}</td>
+                <td>{toWIB(r.finished_at)}</td>
               </tr>
             ))}
           </tbody>

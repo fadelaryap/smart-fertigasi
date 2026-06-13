@@ -1,4 +1,5 @@
 import { getSetting } from "@/lib/db";
+import { toWIB } from "@/lib/time";
 import { isDryRun } from "@/lib/ewelink";
 import { testEwelinkAction, testAgrihubAction } from "./actions";
 
@@ -21,7 +22,7 @@ function ResultBox({ data }: { data: any }) {
       <span className={`badge ${ok ? "on" : "off"}`} style={ok ? {} : { color: "var(--danger)" }}>
         {ok ? "OK" : "GAGAL"}
       </span>{" "}
-      <span className="muted">{data.ts}</span>
+      <span className="muted">{toWIB(data.ts)}</span>
       <pre
         style={{
           background: "var(--bg)",

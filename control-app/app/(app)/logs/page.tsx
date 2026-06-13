@@ -1,4 +1,5 @@
 import { getDb } from "@/lib/db";
+import { toWIB } from "@/lib/time";
 
 export const dynamic = "force-dynamic";
 
@@ -28,7 +29,7 @@ export default function LogsPage() {
       <table>
         <thead>
           <tr>
-            <th>ts (UTC)</th>
+            <th>ts (WIB)</th>
             <th>level</th>
             <th>event</th>
             <th>detail</th>
@@ -37,7 +38,7 @@ export default function LogsPage() {
         <tbody>
           {rows.map((r) => (
             <tr key={r.id}>
-              <td style={{ whiteSpace: "nowrap" }}>{r.ts}</td>
+              <td style={{ whiteSpace: "nowrap" }}>{toWIB(r.ts)}</td>
               <td style={{ color: LEVEL_COLOR[r.level] ?? "inherit", fontWeight: 600 }}>
                 {r.level}
               </td>
