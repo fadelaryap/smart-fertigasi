@@ -1,6 +1,6 @@
 // PM2 ecosystem file for the Control App. (Use EITHER PM2 or the systemd unit.)
 //
-//   cd /opt/agrihub-fertigation
+//   cd /home/fadelaryap/agrihub-fertigation
 //   pm2 start deploy/pm2.config.js
 //   pm2 save && pm2 startup    # auto-start on boot
 //
@@ -10,7 +10,7 @@ module.exports = {
   apps: [
     {
       name: "fertigation-control",
-      cwd: "/opt/agrihub-fertigation/control-app",
+      cwd: "/home/fadelaryap/agrihub-fertigation/control-app",
       script: "npm",
       args: "start",
       env: {

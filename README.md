@@ -44,8 +44,8 @@ sudo apt update && sudo apt install -y nginx python3-venv
 ## 2. Clone + install dependency
 
 ```bash
-git clone <repo> /opt/agrihub-fertigation
-cd /opt/agrihub-fertigation
+git clone <repo> /home/fadelaryap/agrihub-fertigation
+cd /home/fadelaryap/agrihub-fertigation
 
 # Control App
 cd control-app && npm install && cd ..
@@ -80,7 +80,7 @@ untuk *mengisi awal* tabel settings pada `npm run seed` pertama (tidak menimpa n
 
 > Ubah `.env` → **restart** Control App. Ubah di web/DB → langsung berlaku.
 
-**`PYTHON_BIN`** wajib menunjuk ke venv: `/opt/agrihub-fertigation/.venv/bin/python`
+**`PYTHON_BIN`** wajib menunjuk ke venv: `/home/fadelaryap/agrihub-fertigation/.venv/bin/python`
 (dipakai scheduler & tombol Run-now untuk men-spawn brain).
 
 **`EWELINK_DRY_RUN`**: `1` = sistem tidak pernah menyentuh relay fisik (semua ON/OFF hanya
@@ -126,7 +126,7 @@ Cek: buka `http://127.0.0.1:4500` → login pakai `ADMIN_USERNAME`/`ADMIN_PASSWO
 ```bash
 crontab -e
 # tempel (sesuaikan path) — lihat deploy/crontab.example:
-* * * * * /opt/agrihub-fertigation/.venv/bin/python /opt/agrihub-fertigation/watchdog/watchdog.py >> /opt/agrihub-fertigation/watchdog/watchdog.log 2>&1
+* * * * * /home/fadelaryap/agrihub-fertigation/.venv/bin/python /home/fadelaryap/agrihub-fertigation/watchdog/watchdog.py >> /home/fadelaryap/agrihub-fertigation/watchdog/watchdog.log 2>&1
 ```
 
 ## 7. Nginx

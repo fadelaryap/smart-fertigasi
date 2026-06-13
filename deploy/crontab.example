@@ -5,12 +5,12 @@
 # and DB_PATH come from there); the explicit CONTROL_APP_URL below is just a
 # safety override. Use the venv's python so scikit-fuzzy/requests are available.
 
-* * * * * /opt/agrihub-fertigation/.venv/bin/python /opt/agrihub-fertigation/watchdog/watchdog.py >> /opt/agrihub-fertigation/watchdog/watchdog.log 2>&1
+* * * * * /home/fadelaryap/agrihub-fertigation/.venv/bin/python /home/fadelaryap/agrihub-fertigation/watchdog/watchdog.py >> /home/fadelaryap/agrihub-fertigation/watchdog/watchdog.log 2>&1
 
 # Notes:
 #  - The Control App scheduler (07:00 & 16:00, editable in the UI) is SEPARATE and
 #    lives inside the Next.js process — it is NOT in cron. Only the watchdog is.
 #  - Logrotate suggestion for watchdog.log (optional):
-#      /opt/agrihub-fertigation/watchdog/watchdog.log {
+#      /home/fadelaryap/agrihub-fertigation/watchdog/watchdog.log {
 #        weekly; rotate 4; compress; missingok; notifempty; copytruncate;
 #      }
