@@ -108,8 +108,18 @@ export async function runIrrigation(p: RunParams) {
     expected_off_at: expectedOff,
   });
 
-  // 1) Open BOTH valves together.
-  await Promise.all(valves.map((v) => setPowerState(v.device_id, v.channel, true)));
+  // // 1) Open BOTH valves together.
+  // await Promise.all(valves.map((v) => setPowerState(v.device_id, v.channel, true)));
+
+  for (let i = 0; i < valves.length; i++) {
+    const v = valves[i];
+  
+    await setPowerState(v.device_id, v.channel, true);
+  
+    if (i < valves.length - 1) {
+      await sleep(3000);
+    }
+  }
   const valveVerified = await Promise.all(
     valves.map((v) => verifyState(v.device_id, v.channel, "on"))
   );
@@ -195,7 +205,16 @@ export async function stopIrrigation(runId: number) {
     if (pumpDelayOff > 0) await sleep(pumpDelayOff * 1000);
 
     // 3) Valves off.
-    await Promise.all(valves.map((v) => setPowerState(v.device_id, v.channel, false)));
+    // await Promise.all(valves.map((v) => setPowerState(v.device_id, v.channel, false)));
+    for (let i = 0; i < valves.length; i++) {
+      const v = valves[i];
+    
+      await setPowerState(v.device_id, v.channel, false);
+    
+      if (i < valves.length - 1) {
+        await sleep(3000);
+      }
+    }
     const valveV = await Promise.all(
       valves.map((v) => verifyState(v.device_id, v.channel, "off"))
     );
