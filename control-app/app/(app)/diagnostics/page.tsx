@@ -2,6 +2,7 @@ import { getSetting } from "@/lib/db";
 import { toWIB } from "@/lib/time";
 import { isDryRun } from "@/lib/ewelink";
 import { testEwelinkAction, testAgrihubAction } from "./actions";
+import { SubmitButton } from "../../submit-button";
 
 export const dynamic = "force-dynamic";
 
@@ -62,7 +63,7 @@ export default function DiagnosticsPage() {
           kredensial eWeLink di <code>.env</code>. Aman walau DRY-RUN ({isDryRun() ? "aktif" : "nonaktif"}).
         </p>
         <form action={testEwelinkAction}>
-          <button type="submit">▶ Test eWeLink</button>
+          <SubmitButton pendingText="Testing eWeLink…">▶ Test eWeLink</SubmitButton>
         </form>
         <div style={{ marginTop: 12 }}>
           <ResultBox data={ew} />
@@ -76,7 +77,7 @@ export default function DiagnosticsPage() {
           channel, hitung ET0 &amp; durasi fuzzy. Menampilkan hasil atau error di tahap mana.
         </p>
         <form action={testAgrihubAction}>
-          <button type="submit">▶ Test agrihub</button>
+          <SubmitButton pendingText="Testing agrihub…">▶ Test agrihub</SubmitButton>
         </form>
         <div style={{ marginTop: 12 }}>
           <ResultBox data={ag} />

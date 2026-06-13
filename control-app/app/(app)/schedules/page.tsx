@@ -1,5 +1,6 @@
 import { getDb } from "@/lib/db";
 import { addSchedule, toggleSchedule, deleteSchedule } from "./actions";
+import { SubmitButton } from "../../submit-button";
 
 export const dynamic = "force-dynamic";
 
@@ -28,11 +29,12 @@ export default function SchedulesPage() {
             <label htmlFor="time">Tambah jam (HH:MM)</label>
             <input id="time" name="time" placeholder="07:00" style={{ width: 120 }} />
           </div>
-          <button type="submit">+ Tambah</button>
+          <SubmitButton pendingText="Menambah…">+ Tambah</SubmitButton>
         </form>
       </div>
 
       <div className="panel">
+        <div className="table-wrap">
         <table>
           <thead>
             <tr>
@@ -55,15 +57,15 @@ export default function SchedulesPage() {
                 <td style={{ display: "flex", gap: 8 }}>
                   <form action={toggleSchedule}>
                     <input type="hidden" name="id" value={r.id} />
-                    <button className="secondary" type="submit">
+                    <SubmitButton className="secondary" pendingText={r.enabled ? "Disabling…" : "Enabling…"}>
                       {r.enabled ? "Disable" : "Enable"}
-                    </button>
+                    </SubmitButton>
                   </form>
                   <form action={deleteSchedule}>
                     <input type="hidden" name="id" value={r.id} />
-                    <button className="danger" type="submit">
+                    <SubmitButton className="danger" pendingText="Menghapus…">
                       Hapus
-                    </button>
+                    </SubmitButton>
                   </form>
                 </td>
               </tr>
@@ -77,6 +79,7 @@ export default function SchedulesPage() {
             )}
           </tbody>
         </table>
+        </div>
       </div>
     </>
   );

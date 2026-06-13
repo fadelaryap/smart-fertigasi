@@ -1,7 +1,8 @@
 import { getDb, isSystemEnabled } from "@/lib/db";
 import { isDryRun } from "@/lib/ewelink";
-import { toWIB } from "@/lib/time";
+import { toWIB, getNextSchedule } from "@/lib/time";
 import { runNowAction, stopRunAction, toggleSystemAction } from "./actions";
+import { SubmitButton } from "../submit-button";
 
 export const dynamic = "force-dynamic";
 
@@ -44,9 +45,15 @@ export default function Dashboard() {
     .prepare("SELECT ts, level, event FROM event_log ORDER BY id DESC LIMIT 1")
     .get() as { ts: string; level: string; event: string } | undefined;
 
+  // Next schedule
+  const enabledSchedules = db
+    .prepare("SELECT time FROM schedules WHERE enabled = 1 ORDER BY time")
+    .all() as { time: string }[];
+  const nextSched = getNextSchedule(enabledSchedules.map((s) => s.time));
+
   return (
     <>
-      <div className="panel" style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+      <div className="panel dash-header" style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
         <h1 style={{ margin: 0 }}>Dashboard</h1>
         <span
           className={`badge ${enabled ? "on" : "off"}`}
@@ -57,17 +64,42 @@ export default function Dashboard() {
         <span className={`badge ${isDryRun() ? "off" : "on"}`}>
           {isDryRun() ? "DRY-RUN" : "LIVE"}
         </span>
-        <form action={toggleSystemAction} style={{ marginLeft: "auto" }}>
-          <button type="submit" className={enabled ? "danger" : ""}>
-            {enabled ? "■ Nonaktifkan sistem" : "▶ Aktifkan sistem"}
-          </button>
-        </form>
-        <form action={runNowAction}>
-          <button type="submit" disabled={!enabled}>
-            ▶ Run now
-          </button>
-        </form>
+        <div className="dash-actions" style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
+          <form action={toggleSystemAction}>
+            <SubmitButton className={enabled ? "danger" : ""} pendingText={enabled ? "Menonaktifkan…" : "Mengaktifkan…"}>
+              {enabled ? "■ Nonaktifkan sistem" : "▶ Aktifkan sistem"}
+            </SubmitButton>
+          </form>
+          <form action={runNowAction}>
+            <SubmitButton disabled={!enabled} pendingText="Menjalankan…">
+              ▶ Run now
+            </SubmitButton>
+          </form>
+        </div>
       </div>
+
+      {/* Next schedule card */}
+      {nextSched ? (
+        <div className={`next-schedule${enabled ? "" : " disabled"}`}>
+          <div className="icon">⏱️</div>
+          <div className="info">
+            <div className="label">Jadwal berikutnya</div>
+            <div className="time">{nextSched.time} WIB</div>
+            <div className="countdown">
+              {enabled ? `≈ ${nextSched.countdown}` : "Sistem nonaktif — jadwal dijeda"}
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="next-schedule disabled">
+          <div className="icon">📅</div>
+          <div className="info">
+            <div className="label">Jadwal berikutnya</div>
+            <div className="time">—</div>
+            <div className="countdown">Belum ada jadwal aktif</div>
+          </div>
+        </div>
+      )}
 
       <div className="panel">
         <h2 style={{ marginTop: 0 }}>Status terakhir</h2>
@@ -99,41 +131,43 @@ export default function Dashboard() {
         {active.length === 0 ? (
           <p className="muted">Tidak ada channel menyala.</p>
         ) : (
-          <table>
-            <thead>
-              <tr>
-                <th>Run</th>
-                <th>Device</th>
-                <th>Ch</th>
-                <th>Role</th>
-                <th>On at (WIB)</th>
-                <th>Expected off (WIB)</th>
-                <th>Verified</th>
-              </tr>
-            </thead>
-            <tbody>
-              {active.map((c) => (
-                <tr key={c.id}>
-                  <td>#{c.run_id}</td>
-                  <td>{c.device_id}</td>
-                  <td>{c.channel}</td>
-                  <td>{c.role}</td>
-                  <td>{toWIB(c.on_at)}</td>
-                  <td>{toWIB(c.expected_off_at)}</td>
-                  <td>{c.verified ? "✓" : "—"}</td>
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Run</th>
+                  <th>Device</th>
+                  <th>Ch</th>
+                  <th>Role</th>
+                  <th>On at (WIB)</th>
+                  <th>Expected off (WIB)</th>
+                  <th>Verified</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {active.map((c) => (
+                  <tr key={c.id}>
+                    <td>#{c.run_id}</td>
+                    <td>{c.device_id}</td>
+                    <td>{c.channel}</td>
+                    <td>{c.role}</td>
+                    <td>{toWIB(c.on_at)}</td>
+                    <td>{toWIB(c.expected_off_at)}</td>
+                    <td>{c.verified ? "✓" : "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
         {runningRunIds.length > 0 && (
-          <div style={{ marginTop: 12, display: "flex", gap: 8 }}>
+          <div style={{ marginTop: 12, display: "flex", gap: 8, flexWrap: "wrap" }}>
             {runningRunIds.map((rid) => (
               <form key={rid} action={stopRunAction}>
                 <input type="hidden" name="run_id" value={rid} />
-                <button className="danger" type="submit">
+                <SubmitButton className="danger" pendingText="Menghentikan…">
                   ■ Stop run #{rid}
-                </button>
+                </SubmitButton>
               </form>
             ))}
           </div>
@@ -142,40 +176,42 @@ export default function Dashboard() {
 
       <div className="panel">
         <h2>Riwayat penyiraman (10 terakhir)</h2>
-        <table>
-          <thead>
-            <tr>
-              <th>ID</th>
-              <th>Trigger</th>
-              <th>Mulai (WIB)</th>
-              <th>Durasi</th>
-              <th>Status</th>
-              <th>ET0</th>
-              <th>Soil</th>
-              <th>Selesai</th>
-            </tr>
-          </thead>
-          <tbody>
-            {runs.map((r) => (
-              <tr key={r.id}>
-                <td>{r.id}</td>
-                <td>{r.triggered_by}</td>
-                <td>{toWIB(r.started_at)}</td>
-                <td>{r.duration_minutes != null ? `${r.duration_minutes} mnt` : "—"}</td>
-                <td>
-                  <span
-                    className={`badge ${r.status === "running" ? "on" : "off"}`}
-                  >
-                    {r.status}
-                  </span>
-                </td>
-                <td>{r.et0 != null ? r.et0.toFixed(3) : "—"}</td>
-                <td>{r.soil_avg != null ? r.soil_avg.toFixed(1) : "—"}</td>
-                <td>{toWIB(r.finished_at)}</td>
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Trigger</th>
+                <th>Mulai (WIB)</th>
+                <th>Durasi</th>
+                <th>Status</th>
+                <th>ET0</th>
+                <th>Soil</th>
+                <th>Selesai</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {runs.map((r) => (
+                <tr key={r.id}>
+                  <td>{r.id}</td>
+                  <td>{r.triggered_by}</td>
+                  <td>{toWIB(r.started_at)}</td>
+                  <td>{r.duration_minutes != null ? `${r.duration_minutes} mnt` : "—"}</td>
+                  <td>
+                    <span
+                      className={`badge ${r.status === "running" ? "on" : "off"}`}
+                    >
+                      {r.status}
+                    </span>
+                  </td>
+                  <td>{r.et0 != null ? r.et0.toFixed(3) : "—"}</td>
+                  <td>{r.soil_avg != null ? r.soil_avg.toFixed(1) : "—"}</td>
+                  <td>{toWIB(r.finished_at)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
     </>
   );

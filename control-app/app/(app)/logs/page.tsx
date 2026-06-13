@@ -26,6 +26,7 @@ export default function LogsPage() {
     <div className="panel">
       <h1>Event log</h1>
       <p className="muted">150 entri terakhir (audit semua aksi, verifikasi, notifikasi).</p>
+      <div className="table-wrap">
       <table>
         <thead>
           <tr>
@@ -43,13 +44,14 @@ export default function LogsPage() {
                 {r.level}
               </td>
               <td>{r.event}</td>
-              <td style={{ fontFamily: "monospace", fontSize: 12, wordBreak: "break-all" }}>
+              <td style={{ fontFamily: "monospace", fontSize: 12, wordBreak: "break-all", whiteSpace: "normal" }}>
                 {r.detail}
               </td>
             </tr>
           ))}
         </tbody>
       </table>
+      </div>
     </div>
   );
 }

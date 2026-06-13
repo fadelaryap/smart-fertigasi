@@ -1,5 +1,6 @@
 import { getDb } from "@/lib/db";
 import { updateDevice } from "./actions";
+import { SubmitButton } from "../../submit-button";
 
 export const dynamic = "force-dynamic";
 
@@ -33,6 +34,7 @@ export default function DevicesPage() {
         >
           <input type="hidden" name="id" value={r.id} />
           <div
+            className="device-grid"
             style={{
               display: "grid",
               gridTemplateColumns: "90px 1fr 80px 1fr auto",
@@ -66,9 +68,9 @@ export default function DevicesPage() {
                 />
                 enabled
               </label>
-              <button type="submit" style={{ marginTop: 6 }}>
+              <SubmitButton style={{ marginTop: 6 }} pendingText="Menyimpan…">
                 Simpan
-              </button>
+              </SubmitButton>
             </div>
           </div>
         </form>

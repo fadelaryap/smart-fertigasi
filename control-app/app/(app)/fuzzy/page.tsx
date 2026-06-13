@@ -1,6 +1,7 @@
 import { getDb } from "@/lib/db";
 import { updateFuzzy } from "./actions";
 import { FUZZY_FIELDS } from "./fields";
+import { SubmitButton } from "../../submit-button";
 
 export const dynamic = "force-dynamic";
 
@@ -63,7 +64,7 @@ export default function FuzzyPage() {
         </div>
       ))}
       <p className="muted">Total field: {FUZZY_FIELDS.length}</p>
-      <button type="submit">Simpan fuzzy config</button>
+      <SubmitButton pendingText="Menyimpan…">Simpan fuzzy config</SubmitButton>
     </form>
   );
 }

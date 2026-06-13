@@ -1,5 +1,6 @@
 import { getDb } from "@/lib/db";
 import { toWIB } from "@/lib/time";
+import { SubmitButton } from "../../submit-button";
 import { updateSettings } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -123,7 +124,7 @@ export default function SettingsPage() {
         <Field name="safety_max_minutes" label="Safety cutoff (menit)" value={s.safety_max_minutes ?? "60"} type="number" hint="Cutoff absolut watchdog (default 60)." />
       </div>
 
-      <button type="submit">Simpan settings</button>
+      <SubmitButton pendingText="Menyimpan…">Simpan settings</SubmitButton>
       </form>
 
       <Subscribers />
@@ -157,6 +158,7 @@ function Subscribers() {
       {subs.length === 0 ? (
         <p className="muted">Belum ada subscriber.</p>
       ) : (
+        <div className="table-wrap">
         <table>
           <thead>
             <tr>
@@ -183,6 +185,7 @@ function Subscribers() {
             ))}
           </tbody>
         </table>
+        </div>
       )}
     </div>
   );

@@ -1,4 +1,5 @@
 import { login } from "./actions";
+import { SubmitButton } from "../submit-button";
 
 export const dynamic = "force-dynamic";
 
@@ -26,7 +27,7 @@ export default async function LoginPage({
           autoComplete="current-password"
         />
         <div style={{ marginTop: 16 }}>
-          <button type="submit">Masuk</button>
+          <SubmitButton pendingText="Masuk…">Masuk</SubmitButton>
         </div>
       </form>
     </div>
