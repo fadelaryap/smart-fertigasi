@@ -32,8 +32,7 @@ deploy/        nginx.conf, pm2.config.js, fertigation.service, crontab.example
 ## 1. Prasyarat (VPS Ubuntu)
 
 - **Node.js LTS** (≥ 20) — untuk Control App + `ewelink-api`.
-- **Python 3.11+** — `requirements.txt` memakai `scipy>=1.16` yang butuh Python ≥ 3.11.
-  (Di Python 3.10, turunkan ke `scipy>=1.13,<1.16`.)
+- **Python 3.10+** — `requirements.txt` memakai `scipy<1.16` (kompatibel Python 3.10, mis. 3.10.12).
 - **Nginx** (reverse proxy, tanpa HTTPS).
 - **PM2** atau **systemd** untuk menjaga Control App hidup.
 
@@ -184,6 +183,17 @@ curl -s -X POST http://127.0.0.1:4500/api/run \
 Setelah yakin, isi kredensial eWeLink di `.env`, set `EWELINK_DRY_RUN=0`, **restart** Control App,
 lalu uji `GET /api/device/list` (read-only) → Run-now → cek valve/pompa → cek watchdog mematikan
 → cek notif Telegram.
+
+## Operasi: master switch & diagnostics
+
+- **Master switch** (badge + tombol di Dashboard): saat **NONAKTIF**, tidak ada penyiraman baru
+  yang dimulai (scheduler skip + `/api/run`/`/api/run-now` balas 409). **Watchdog tetap jalan** —
+  valve yang sedang menyala tetap dimatikan. Aman dipakai untuk maintenance.
+- **Diagnostics** (halaman terpisah): tombol **Test eWeLink** (panggil `getDevices` asli, read-only)
+  dan **Test agrihub** (jalankan `brain.py --test`: fetch + pemetaan channel + ET0/durasi fuzzy,
+  tanpa menyiram). Keduanya menampilkan hasil atau error di tahap mana.
+- **Status terakhir** di Dashboard: ringkasan run terakhir + aktivitas terakhir. Untuk jejak
+  per-tahap tiap jadwal, lihat halaman **Logs**.
 
 ## 10. Keamanan
 

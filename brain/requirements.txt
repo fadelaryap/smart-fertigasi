@@ -1,12 +1,9 @@
-# Fuzzy controller (as provided)
+# Fuzzy controller
 numpy>=1.26
-scipy>=1.16.0
+scipy>=1.13,<1.16    # <1.16 kompatibel Python 3.10 (scipy 1.16+ butuh Python 3.11+)
 packaging>=24.0
 networkx>=3.2
 scikit-fuzzy>=0.5.0
 # Brain + watchdog
 requests>=2.31
 python-dotenv>=1.0
-
-# NOTE: scipy>=1.16 requires Python >=3.11. On the VPS use Python 3.11+.
-# (On an older Python 3.10 dev box, relax to e.g. scipy>=1.13 to install.)

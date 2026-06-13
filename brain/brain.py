@@ -95,6 +95,8 @@ def main() -> int:
                         choices=["schedule", "manual"])
     parser.add_argument("--dry", action="store_true",
                         help="decide only; no POST / DB write / notify")
+    parser.add_argument("--test", action="store_true",
+                        help="print sensor+fuzzy result as one JSON line (diagnostics UI)")
     args = parser.parse_args()
 
     db.load_env()
@@ -103,6 +105,28 @@ def main() -> int:
         # 1) Rebuild fuzzy controller from DB config every run.
         cfg_row = db.get_fuzzy_config(conn)
         controller = FuzzyIrrigationController(FuzzyConfig(**cfg_row))
+
+        # Diagnostics: print sensor + fuzzy result as ONE JSON line, no side effects.
+        if args.test:
+            try:
+                rt = read_sensors(conn)
+            except Exception as exc:  # noqa: BLE001
+                print(json.dumps({"ok": False, "error": str(exc)}))
+                return 0
+            et0_t = controller.calc_et0(rt["temperature"], rt["relative_humidity"],
+                                        rt["wind_speed"], rt["solar_radiation"])
+            dur_t = controller.compute(rt["soil_moisture"], rt["temperature"],
+                                       rt["relative_humidity"], rt["wind_speed"],
+                                       rt["solar_radiation"])
+            print(json.dumps({
+                "ok": True,
+                "temperature": rt["temperature"], "relative_humidity": rt["relative_humidity"],
+                "wind_speed": rt["wind_speed"], "solar_radiation": rt["solar_radiation"],
+                "soil_moisture": round(rt["soil_moisture"], 2),
+                "soil_channels": rt["soil_channels"],
+                "et0": round(et0_t, 4), "duration_minutes": round(dur_t, 2),
+            }))
+            return 0
 
         # 2) Read sensors from agrihub (channels mapped via DB settings).
         try:
