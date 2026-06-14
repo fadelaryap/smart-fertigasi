@@ -1,3 +1,5 @@
+import { redirect } from "next/navigation";
+import { getCurrentUser } from "@/lib/session";
 import { login } from "./actions";
 import { SubmitButton } from "../submit-button";
 
@@ -8,6 +10,10 @@ export default async function LoginPage({
 }: {
   searchParams: Promise<{ error?: string }>;
 }) {
+  // If already authenticated, redirect to dashboard
+  const user = await getCurrentUser();
+  if (user) redirect("/");
+
   const sp = await searchParams;
   return (
     <div className="panel" style={{ maxWidth: 360, margin: "40px auto" }}>

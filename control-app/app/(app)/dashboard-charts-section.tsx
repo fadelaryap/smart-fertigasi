@@ -4,6 +4,7 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from "
 import {
   IrrigationTimeline,
   MetricLineChart,
+  DualLineChart,
   type ScheduleBar,
   type RunDataPoint,
 } from "./dashboard-chart";
@@ -55,8 +56,8 @@ export function TimelineSlot() {
       <div className="card-header">
         <div className="card-icon" style={{ background: "linear-gradient(135deg, #f59e0b, #f97316)" }}>📊</div>
         <div>
-          <h3>Jadwal vs Aktual Penyiraman</h3>
-          <p className="card-subtitle">3 hari terakhir</p>
+          <h3>Timeline Penyiraman</h3>
+          <p className="card-subtitle">Jadwal vs aktual · 3 hari terakhir</p>
         </div>
       </div>
       <ChartShell loading={loading}>
@@ -73,13 +74,12 @@ export function DurationChartSlot() {
       <div className="card-header">
         <div className="card-icon" style={{ background: "linear-gradient(135deg, #8b5cf6, #6366f1)" }}>⏱️</div>
         <div>
-          <h3>Durasi</h3>
-          <p className="card-subtitle">Lama penyiraman (menit)</p>
+          <h3>Jadwal vs Aktual</h3>
+          <p className="card-subtitle">Durasi penyiraman (menit)</p>
         </div>
       </div>
       <ChartShell loading={loading}>
-        {data && <MetricLineChart data={data.runDataPoints} metricKey="durationMinutes"
-          label="Durasi" color="#8b5cf6" unit="mnt"
+        {data && <DualLineChart data={data.runDataPoints}
           rangeStart={data.rangeStart} rangeEnd={data.rangeEnd} height={190} />}
       </ChartShell>
     </div>

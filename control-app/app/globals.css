@@ -26,13 +26,13 @@ a{color:var(--accent-2);text-decoration:none}
 a:hover{text-decoration:underline}
 
 /* ─── Layout — full width with breathing room ────────────────────────────── */
-.container{max-width:100%;margin:0 auto;padding:28px 56px 64px}
-nav.topbar{background:var(--panel-solid);border-bottom:1px solid var(--border);padding:12px 56px;display:flex;gap:16px;align-items:center;flex-wrap:wrap;backdrop-filter:blur(12px)}
+.container{max-width:100%;margin:0 auto;padding:28px 160px 64px}
+nav.topbar{background:var(--panel-solid);border-bottom:1px solid var(--border);padding:12px 160px;display:flex;gap:16px;align-items:center;flex-wrap:wrap}
 nav.topbar .brand{font-weight:700;color:var(--text);font-size:16px}
 
 /* ─── Glass Panel ────────────────────────────────────────────────────────── */
-.panel{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:16px 20px;margin-bottom:16px;backdrop-filter:blur(16px)}
-.glass-card{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);backdrop-filter:blur(16px);transition:border-color .25s,box-shadow .25s,transform .2s}
+.panel{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:16px 20px;margin-bottom:16px}
+.glass-card{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);transition:border-color .25s,box-shadow .25s,transform .2s}
 .glass-card:hover{border-color:var(--border-hover);box-shadow:0 8px 32px rgba(0,0,0,0.25);transform:translateY(-2px)}
 .muted{color:var(--muted)}
 
@@ -76,7 +76,7 @@ th{color:var(--muted);font-weight:600;font-size:11px;text-transform:uppercase;le
    ═══════════════════════════════════════════════════════════════════════════ */
 
 /* Header */
-.dash-header-new{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:20px;padding:20px 24px;background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);backdrop-filter:blur(16px)}
+.dash-header-new{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:20px;padding:20px 24px;background:var(--panel);border:1px solid var(--border);border-radius:var(--radius)}
 .dash-header-left h1{margin:0;font-size:26px;font-weight:800;background:linear-gradient(135deg,#e6edf3,#8b98a5);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
 .dash-badges{display:flex;gap:8px;margin-top:6px;flex-wrap:wrap}
 .dash-header-right{display:flex;gap:8px;align-items:center}
@@ -180,7 +180,7 @@ th{color:var(--muted);font-weight:600;font-size:11px;text-transform:uppercase;le
 .metric-chart-svg{display:block}
 
 /* ─── Chart Tooltips ─────────────────────────────────────────────────────── */
-.chart-tooltip{position:absolute;z-index:20;pointer-events:none;background:var(--panel-solid);border:1px solid var(--border-hover);border-radius:10px;padding:10px 14px;font-size:12px;box-shadow:0 12px 32px rgba(0,0,0,.5);backdrop-filter:blur(8px);min-width:140px;animation:tt-in .15s ease}
+.chart-tooltip{position:absolute;z-index:20;pointer-events:none;background:var(--panel-solid);border:1px solid var(--border-hover);border-radius:10px;padding:10px 14px;font-size:12px;box-shadow:0 12px 32px rgba(0,0,0,.5);min-width:140px;animation:tt-in .15s ease}
 @keyframes tt-in{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
 .tt-title{font-weight:700;font-size:13px;margin-bottom:4px;color:var(--text)}
 .tt-row{display:flex;align-items:center;gap:6px;padding:2px 0;color:var(--text)}
@@ -206,13 +206,15 @@ th{color:var(--muted);font-weight:600;font-size:11px;text-transform:uppercase;le
    RESPONSIVE
    ═══════════════════════════════════════════════════════════════════════════ */
 @media(max-width:1200px){
+  .container{padding:28px 48px 64px}
+  nav.topbar{padding:12px 48px}
   .dash-grid{grid-template-columns:repeat(4,1fr)}
   .card-full{grid-column:span 4}
   .card-chart{grid-column:span 2}
   .card-md{grid-column:span 2}
 }
 @media(max-width:900px){
-  .container{padding:16px 16px 48px}
+  .container{padding:16px 24px 48px}
   .dash-grid{grid-template-columns:repeat(2,1fr)}
   .card-full,.card-chart{grid-column:span 2}
   .card-md{grid-column:span 2}

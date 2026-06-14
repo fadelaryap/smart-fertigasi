@@ -103,16 +103,43 @@ export async function GET() {
   // Run data points with ISO timestamps for time-based x-axis
   const runDataPoints = runs
     .filter((r) => r.started_at)
-    .map((r) => ({
-      date: new Date(r.started_at!).toLocaleDateString("sv-SE", {
-        timeZone: "Asia/Jakarta",
-      }),
-      startedAtIso: r.started_at!,
-      durationMinutes: r.duration_minutes || 0,
-      et0: r.et0,
-      soilAvg: r.soil_avg,
-      status: r.status,
-    }));
+    .map((r) => {
+      // Compute actual duration from start→finish (more precise than stored duration_minutes)
+      let actualDuration = r.duration_minutes || 0;
+      if (r.started_at && r.finished_at) {
+        actualDuration =
+          (new Date(r.finished_at).getTime() - new Date(r.started_at).getTime()) / 60000;
+      }
+
+      // Compute the scheduled duration: find the closest schedule, use the
+      // run's planned duration (duration_minutes) as the schedule target.
+      const wibStart = new Date(
+        new Date(r.started_at!).getTime() + 7 * 60 * 60 * 1000
+      );
+      const actualOnMin =
+        wibStart.getUTCHours() * 60 + wibStart.getUTCMinutes();
+      let bestDiff = Infinity;
+      for (const st of scheduleTimes) {
+        const [sh, sm] = st.split(":").map(Number);
+        const diff = Math.abs(sh * 60 + sm - actualOnMin);
+        if (diff < bestDiff) bestDiff = diff;
+      }
+      // scheduled duration = the originally planned duration_minutes
+      const scheduledDuration = r.duration_minutes || 0;
+
+      return {
+        date: new Date(r.started_at!).toLocaleDateString("sv-SE", {
+          timeZone: "Asia/Jakarta",
+        }),
+        startedAtIso: r.started_at!,
+        durationMinutes: r.duration_minutes || 0,
+        actualDurationMinutes: Math.round(actualDuration * 100) / 100,
+        scheduledDurationMinutes: scheduledDuration,
+        et0: r.et0,
+        soilAvg: r.soil_avg,
+        status: r.status,
+      };
+    });
 
   return NextResponse.json({
     bars,

@@ -15,6 +15,8 @@ export interface RunDataPoint {
   date: string;
   startedAtIso: string;
   durationMinutes: number;
+  actualDurationMinutes: number;
+  scheduledDurationMinutes: number;
   et0: number | null;
   soilAvg: number | null;
   status: string;
@@ -447,6 +449,233 @@ function buildSmoothPath(points: { x: number; y: number }[]): string {
     d += ` C ${cp1x},${cp1y} ${cp2x},${cp2y} ${p2.x},${p2.y}`;
   }
   return d;
+}
+
+// ─── Dual Line Chart (Jadwal vs Aktual Duration) ───────────────────────────
+export function DualLineChart({
+  data,
+  rangeStart,
+  rangeEnd,
+  height = 200,
+}: {
+  data: RunDataPoint[];
+  rangeStart: string;
+  rangeEnd: string;
+  height?: number;
+}) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
+  const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
+
+  const padding = { top: 20, right: 16, bottom: 48, left: 48 };
+  const w = 600;
+  const h = height;
+  const plotW = w - padding.left - padding.right;
+  const plotH = h - padding.top - padding.bottom;
+
+  // Fixed 3-day range
+  const tStart = new Date(rangeStart).getTime();
+  const tEnd = new Date(rangeEnd).getTime();
+  const tRange = tEnd - tStart || 1;
+
+  // Both series share the same x positions (each run)
+  const validPoints = data
+    .filter((d) => d.startedAtIso)
+    .map((d, i) => ({
+      idx: i,
+      t: new Date(d.startedAtIso).getTime(),
+      scheduled: d.scheduledDurationMinutes,
+      actual: d.actualDurationMinutes,
+      data: d,
+    }));
+
+  // Y range across both series
+  const allVals = validPoints.flatMap((p) => [p.scheduled, p.actual]);
+  const yMin = allVals.length ? Math.min(...allVals) : 0;
+  const yMax = allVals.length ? Math.max(...allVals) : 1;
+  const yRange = yMax - yMin || 1;
+  const yPad = yRange * 0.15;
+
+  const xOf = (t: number) => padding.left + ((t - tStart) / tRange) * plotW;
+  const yOf = (v: number) =>
+    padding.top + plotH - ((v - (yMin - yPad)) / (yRange + yPad * 2)) * plotH;
+
+  const schedPoints = validPoints.map((p) => ({ x: xOf(p.t), y: yOf(p.scheduled), ...p }));
+  const actualPoints = validPoints.map((p) => ({ x: xOf(p.t), y: yOf(p.actual), ...p }));
+
+  // X-axis ticks
+  const dayLines: { x: number; label: string; isMidnight: boolean }[] = [];
+  const startDay = new Date(tStart);
+  startDay.setUTCHours(0, 0, 0, 0);
+  const wibMidnight = new Date(startDay);
+  wibMidnight.setUTCHours(-7, 0, 0, 0);
+
+  for (let d = new Date(wibMidnight); d.getTime() <= tEnd + 24 * 3600000; d.setDate(d.getDate() + 1)) {
+    const t0 = d.getTime();
+    if (t0 >= tStart && t0 <= tEnd) {
+      const wib = new Date(t0 + 7 * 3600000);
+      const dd = wib.getUTCDate().toString().padStart(2, "0");
+      const mm = (wib.getUTCMonth() + 1).toString().padStart(2, "0");
+      dayLines.push({ x: xOf(t0), label: `${dd}/${mm} 00:00`, isMidnight: true });
+    }
+    const t12 = d.getTime() + 12 * 3600000;
+    if (t12 >= tStart && t12 <= tEnd) {
+      const wib = new Date(t12 + 7 * 3600000);
+      const dd = wib.getUTCDate().toString().padStart(2, "0");
+      const mm = (wib.getUTCMonth() + 1).toString().padStart(2, "0");
+      dayLines.push({ x: xOf(t12), label: `${dd}/${mm} 12:00`, isMidnight: false });
+    }
+  }
+
+  // Y ticks
+  const yTicks = 4;
+  const yTickVals = Array.from({ length: yTicks + 1 }, (_, i) =>
+    (yMin - yPad) + ((yRange + yPad * 2) * i) / yTicks
+  );
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    const rect = containerRef.current?.getBoundingClientRect();
+    if (rect) setMousePos({ x: e.clientX - rect.left, y: e.clientY - rect.top });
+  };
+
+  const schedColor = "#f59e0b";
+  const actualColor = "#8b5cf6";
+
+  return (
+    <div className="metric-chart-container" ref={containerRef} onMouseMove={handleMouseMove}>
+      <svg width="100%" viewBox={`0 0 ${w} ${h}`} className="metric-chart-svg">
+        {/* Y grid + labels */}
+        {yTickVals.map((val, i) => {
+          const y = yOf(val);
+          return (
+            <g key={i}>
+              <line x1={padding.left} y1={y} x2={w - padding.right} y2={y}
+                stroke="var(--border)" strokeWidth="1" opacity="0.25" />
+              <text x={padding.left - 6} y={y + 4} fill="var(--muted)" fontSize="10"
+                textAnchor="end" fontFamily="inherit">
+                {val >= 100 ? val.toFixed(0) : val >= 10 ? val.toFixed(1) : val.toFixed(2)}
+              </text>
+            </g>
+          );
+        })}
+
+        {/* X-axis */}
+        {dayLines.map((dl, i) => (
+          <g key={i}>
+            <line x1={dl.x} y1={padding.top} x2={dl.x} y2={padding.top + plotH}
+              stroke="var(--border)" strokeWidth={dl.isMidnight ? "1.5" : "1"}
+              strokeDasharray={dl.isMidnight ? "0" : "4 4"} opacity={dl.isMidnight ? 0.4 : 0.2} />
+            <text x={dl.x} y={h - 6} fill="var(--muted)" fontSize="9"
+              textAnchor="middle" fontFamily="inherit" fontWeight={dl.isMidnight ? "700" : "400"}>
+              {dl.label}
+            </text>
+          </g>
+        ))}
+
+        {/* Scheduled duration: area + line */}
+        {schedPoints.length >= 2 && (() => {
+          const pathD = buildSmoothPath(schedPoints);
+          const fillPath = `${pathD} L ${schedPoints[schedPoints.length - 1].x},${padding.top + plotH} L ${schedPoints[0].x},${padding.top + plotH} Z`;
+          return (
+            <g>
+              <defs>
+                <linearGradient id="fill-sched-dur" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor={schedColor} stopOpacity="0.25" />
+                  <stop offset="100%" stopColor={schedColor} stopOpacity="0.02" />
+                </linearGradient>
+              </defs>
+              <path d={fillPath} fill="url(#fill-sched-dur)" />
+              <path d={pathD} fill="none" stroke={schedColor} strokeWidth="2.5"
+                strokeLinecap="round" strokeLinejoin="round" opacity="0.9" />
+            </g>
+          );
+        })()}
+
+        {/* Actual duration: area + line */}
+        {actualPoints.length >= 2 && (() => {
+          const pathD = buildSmoothPath(actualPoints);
+          const fillPath = `${pathD} L ${actualPoints[actualPoints.length - 1].x},${padding.top + plotH} L ${actualPoints[0].x},${padding.top + plotH} Z`;
+          return (
+            <g>
+              <defs>
+                <linearGradient id="fill-actual-dur" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor={actualColor} stopOpacity="0.25" />
+                  <stop offset="100%" stopColor={actualColor} stopOpacity="0.02" />
+                </linearGradient>
+              </defs>
+              <path d={fillPath} fill="url(#fill-actual-dur)" />
+              <path d={pathD} fill="none" stroke={actualColor} strokeWidth="2.5"
+                strokeLinecap="round" strokeLinejoin="round" />
+            </g>
+          );
+        })()}
+
+        {/* Data points — scheduled */}
+        {schedPoints.map((p, i) => (
+          <circle key={`s${i}`} cx={p.x} cy={p.y} r={hoveredIdx === i ? 6 : 3.5}
+            fill={schedColor} stroke="var(--panel-solid)" strokeWidth="2"
+            onMouseEnter={() => setHoveredIdx(i)} onMouseLeave={() => setHoveredIdx(null)}
+            style={{ cursor: "pointer", transition: "r 0.15s ease" }} />
+        ))}
+        {/* Data points — actual */}
+        {actualPoints.map((p, i) => (
+          <circle key={`a${i}`} cx={p.x} cy={p.y} r={hoveredIdx === i ? 6 : 3.5}
+            fill={actualColor} stroke="var(--panel-solid)" strokeWidth="2"
+            onMouseEnter={() => setHoveredIdx(i)} onMouseLeave={() => setHoveredIdx(null)}
+            style={{ cursor: "pointer", transition: "r 0.15s ease" }} />
+        ))}
+
+        {/* Hover crosshair */}
+        {hoveredIdx !== null && schedPoints[hoveredIdx] && (
+          <g>
+            <line x1={schedPoints[hoveredIdx].x} y1={padding.top}
+              x2={schedPoints[hoveredIdx].x} y2={padding.top + plotH}
+              stroke="var(--muted)" strokeWidth="1" opacity="0.3" strokeDasharray="3 3" />
+          </g>
+        )}
+
+        {/* No data */}
+        {validPoints.length === 0 && (
+          <text x={w / 2} y={h / 2} fill="var(--muted)" fontSize="13"
+            textAnchor="middle" fontFamily="inherit">
+            Tidak ada data durasi dalam 3 hari
+          </text>
+        )}
+      </svg>
+
+      {/* Tooltip */}
+      {hoveredIdx !== null && validPoints[hoveredIdx] && (
+        <div className="chart-tooltip" style={{ left: mousePos.x + 12, top: mousePos.y - 10 }}>
+          <div className="tt-title">{validPoints[hoveredIdx].data.date}</div>
+          <div className="tt-row">
+            <span className="tt-dot" style={{ background: schedColor }}></span>
+            Jadwal: <strong>{validPoints[hoveredIdx].scheduled.toFixed(1)}</strong> mnt
+          </div>
+          <div className="tt-row">
+            <span className="tt-dot" style={{ background: actualColor }}></span>
+            Aktual: <strong>{validPoints[hoveredIdx].actual.toFixed(1)}</strong> mnt
+          </div>
+          <div className="tt-row muted" style={{ fontSize: 10 }}>
+            Status: {validPoints[hoveredIdx].data.status}
+          </div>
+        </div>
+      )}
+
+      <div className="chart-legend">
+        <span className="legend-item">
+          <span className="legend-dot" style={{ background: schedColor }}></span>
+          Jadwal (mnt)
+        </span>
+        <span className="legend-item">
+          <span className="legend-dot" style={{ background: actualColor }}></span>
+          Aktual (mnt)
+        </span>
+        <span className="legend-item muted" style={{ marginLeft: "auto", fontSize: 10 }}>
+          {validPoints.length} data point · 3 hari
+        </span>
+      </div>
+    </div>
+  );
 }
 
 // ─── Live Clock ────────────────────────────────────────────────────────────
