@@ -3,6 +3,14 @@ import { isDryRun } from "@/lib/ewelink";
 import { toWIB, getNextSchedule } from "@/lib/time";
 import { runNowAction, stopRunAction, toggleSystemAction } from "./actions";
 import { SubmitButton } from "../submit-button";
+import { LiveClock } from "./dashboard-chart";
+import {
+  DashboardDataProvider,
+  DurationChartSlot,
+  ET0ChartSlot,
+  SoilChartSlot,
+  TimelineSlot,
+} from "./dashboard-charts-section";
 
 export const dynamic = "force-dynamic";
 
@@ -45,29 +53,45 @@ export default function Dashboard() {
     .prepare("SELECT ts, level, event FROM event_log ORDER BY id DESC LIMIT 1")
     .get() as { ts: string; level: string; event: string } | undefined;
 
-  // Next schedule
+  // Stats
+  const totalRuns = (db.prepare("SELECT COUNT(*) as cnt FROM irrigation_runs").get() as { cnt: number }).cnt;
+  const completedRuns = (db.prepare("SELECT COUNT(*) as cnt FROM irrigation_runs WHERE status='completed'").get() as { cnt: number }).cnt;
+  const failedRuns = (db.prepare("SELECT COUNT(*) as cnt FROM irrigation_runs WHERE status='failed'").get() as { cnt: number }).cnt;
+  const avgDuration = (db.prepare("SELECT AVG(duration_minutes) as avg FROM irrigation_runs WHERE duration_minutes IS NOT NULL").get() as { avg: number | null }).avg;
+
+  // Schedules
   const enabledSchedules = db
     .prepare("SELECT time FROM schedules WHERE enabled = 1 ORDER BY time")
     .all() as { time: string }[];
   const nextSched = getNextSchedule(enabledSchedules.map((s) => s.time));
+  const totalSchedules = enabledSchedules.length;
+
+  // Active devices
+  const activeDevices = (db.prepare("SELECT COUNT(*) as cnt FROM device_config WHERE enabled=1").get() as { cnt: number }).cnt;
 
   return (
     <>
-      <div className="panel dash-header" style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-        <h1 style={{ margin: 0 }}>Dashboard</h1>
-        <span
-          className={`badge ${enabled ? "on" : "off"}`}
-          style={enabled ? {} : { color: "var(--danger)" }}
-        >
-          {enabled ? "SISTEM AKTIF" : "SISTEM NONAKTIF"}
-        </span>
-        <span className={`badge ${isDryRun() ? "off" : "on"}`}>
-          {isDryRun() ? "DRY-RUN" : "LIVE"}
-        </span>
-        <div className="dash-actions" style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
+      {/* ─── Header ────────────────────────────────────────────────────── */}
+      <div className="dash-header-new">
+        <div className="dash-header-left">
+          <h1>Dashboard</h1>
+          <div className="dash-badges">
+            <span className={`badge-pill ${enabled ? "badge-active" : "badge-inactive"}`}>
+              <span className="badge-dot"></span>
+              {enabled ? "SISTEM AKTIF" : "SISTEM NONAKTIF"}
+            </span>
+            <span className={`badge-pill ${isDryRun() ? "badge-warn" : "badge-live"}`}>
+              {isDryRun() ? "DRY-RUN" : "LIVE"}
+            </span>
+          </div>
+        </div>
+        <div className="dash-header-right">
           <form action={toggleSystemAction}>
-            <SubmitButton className={enabled ? "danger" : ""} pendingText={enabled ? "Menonaktifkan…" : "Mengaktifkan…"}>
-              {enabled ? "■ Nonaktifkan sistem" : "▶ Aktifkan sistem"}
+            <SubmitButton
+              className={enabled ? "danger" : ""}
+              pendingText={enabled ? "Menonaktifkan…" : "Mengaktifkan…"}
+            >
+              {enabled ? "■ Nonaktifkan" : "▶ Aktifkan"}
             </SubmitButton>
           </form>
           <form action={runNowAction}>
@@ -78,141 +102,268 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Next schedule card */}
-      {nextSched ? (
-        <div className={`next-schedule${enabled ? "" : " disabled"}`}>
-          <div className="icon">⏱️</div>
-          <div className="info">
-            <div className="label">Jadwal berikutnya</div>
-            <div className="time">{nextSched.time} WIB</div>
-            <div className="countdown">
-              {enabled ? `≈ ${nextSched.countdown}` : "Sistem nonaktif — jadwal dijeda"}
+      {/* ─── Grid: 6 columns ───────────────────────────────────────────── */}
+      {/* Layout:
+           Row 1: [stat×6]
+           Row 2: [Jadwal 2col][Clock 1col][Device 1col] | [Chart Durasi 2col]
+           Row 3: [Status Terakhir 2col][Channel Aktif 2col] | [Chart ET0 2col]
+           Row 4: [Timeline 4col] | [Chart Soil 2col]
+           Row 5: [Riwayat table 6col]
+      */}
+      <DashboardDataProvider>
+        <div className="dash-grid">
+          {/* ── Row 1: Stat cards ─────────────────────────────────────── */}
+          <div className="dash-card card-sm glass-card stat-card stat-green">
+            <div className="stat-icon">🚿</div>
+            <div className="stat-body">
+              <div className="stat-value">{totalRuns}</div>
+              <div className="stat-label">Total Run</div>
+            </div>
+          </div>
+
+          <div className="dash-card card-sm glass-card stat-card stat-blue">
+            <div className="stat-icon">✅</div>
+            <div className="stat-body">
+              <div className="stat-value">{completedRuns}</div>
+              <div className="stat-label">Selesai</div>
+            </div>
+          </div>
+
+          <div className="dash-card card-sm glass-card stat-card stat-red">
+            <div className="stat-icon">❌</div>
+            <div className="stat-body">
+              <div className="stat-value">{failedRuns}</div>
+              <div className="stat-label">Gagal</div>
+            </div>
+          </div>
+
+          <div className="dash-card card-sm glass-card stat-card stat-purple">
+            <div className="stat-icon">⏱️</div>
+            <div className="stat-body">
+              <div className="stat-value">{avgDuration != null ? avgDuration.toFixed(1) : "—"}</div>
+              <div className="stat-label">Rata-rata (mnt)</div>
+            </div>
+          </div>
+
+          <div className="dash-card card-sm glass-card stat-card stat-cyan">
+            <div className="stat-icon">📡</div>
+            <div className="stat-body">
+              <div className="stat-value">{activeDevices}</div>
+              <div className="stat-label">Device Aktif</div>
+            </div>
+          </div>
+
+          <div className="dash-card card-sm glass-card clock-card">
+            <LiveClock />
+          </div>
+
+          {/* ── Row 2: Jadwal (2col) + Status (2col) | Durasi chart (2col) */}
+          <div className={`dash-card glass-card next-sched-card${enabled ? "" : " disabled"}`} style={{ gridColumn: "span 2" }}>
+            <div className="card-header">
+              <div className="card-icon" style={{ background: "linear-gradient(135deg, #3fb950, #10b981)" }}>⏰</div>
+              <div>
+                <h3>Jadwal Berikutnya</h3>
+                <p className="card-subtitle">{totalSchedules} jadwal aktif</p>
+              </div>
+            </div>
+            {nextSched ? (
+              <div className="next-sched-body">
+                <div className="next-sched-time">{nextSched.time} <span className="tz-label">WIB</span></div>
+                <div className="next-sched-countdown">
+                  {enabled ? `≈ ${nextSched.countdown}` : "Sistem nonaktif — jadwal dijeda"}
+                </div>
+                <div className="next-sched-schedules">
+                  {enabledSchedules.map((s, i) => (
+                    <span key={i} className={`sched-chip${s.time === nextSched.time ? " active" : ""}`}>
+                      {s.time}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div className="next-sched-body">
+                <div className="next-sched-time muted">—</div>
+                <div className="next-sched-countdown">Belum ada jadwal aktif</div>
+              </div>
+            )}
+          </div>
+
+          <div className="dash-card glass-card" style={{ gridColumn: "span 2" }}>
+            <div className="card-header">
+              <div className="card-icon" style={{ background: "linear-gradient(135deg, #f59e0b, #ef4444)" }}>📋</div>
+              <div>
+                <h3>Status Terakhir</h3>
+                <p className="card-subtitle">Run terbaru & aktivitas</p>
+              </div>
+            </div>
+            {lastRun ? (
+              <div className="last-run-body">
+                <div className="last-run-row">
+                  <span className="last-run-label">Run</span>
+                  <span className="last-run-value">#{lastRun.id}</span>
+                </div>
+                <div className="last-run-row">
+                  <span className="last-run-label">Status</span>
+                  <span className={`badge-pill ${lastRun.status === "completed" || lastRun.status === "running" ? "badge-active" : "badge-inactive"}`}>
+                    <span className="badge-dot"></span>
+                    {lastRun.status}
+                  </span>
+                </div>
+                <div className="last-run-row">
+                  <span className="last-run-label">Trigger</span>
+                  <span className="last-run-value">{lastRun.triggered_by}</span>
+                </div>
+                <div className="last-run-row">
+                  <span className="last-run-label">Mulai</span>
+                  <span className="last-run-value">{toWIB(lastRun.started_at)}</span>
+                </div>
+                {lastRun.duration_minutes != null && (
+                  <div className="last-run-row">
+                    <span className="last-run-label">Durasi</span>
+                    <span className="last-run-value">{lastRun.duration_minutes} mnt</span>
+                  </div>
+                )}
+                {lastRun.et0 != null && (
+                  <div className="last-run-row">
+                    <span className="last-run-label">ET0</span>
+                    <span className="last-run-value">{lastRun.et0.toFixed(3)}</span>
+                  </div>
+                )}
+                {lastRun.soil_avg != null && (
+                  <div className="last-run-row">
+                    <span className="last-run-label">Soil</span>
+                    <span className="last-run-value">{lastRun.soil_avg.toFixed(1)}%</span>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <p className="muted" style={{ padding: "12px 0" }}>Belum ada run.</p>
+            )}
+            {lastEvent && (
+              <div className="last-event">
+                <span>{lastEvent.level === "info" ? "ℹ️" : lastEvent.level === "warn" ? "⚠️" : "🚨"}</span>
+                <span className="event-text">{lastEvent.event}</span>
+                <span className="event-time">{toWIB(lastEvent.ts)}</span>
+              </div>
+            )}
+          </div>
+
+          {/* Duration chart — right column of row 2 */}
+          <DurationChartSlot />
+
+          {/* ── Row 3: Channel (2col) | ET0 chart (2col) | Soil chart (2col) */}
+          <div className="dash-card glass-card" style={{ gridColumn: "span 2" }}>
+            <div className="card-header">
+              <div className="card-icon" style={{ background: "linear-gradient(135deg, #06b6d4, #3b82f6)" }}>⚡</div>
+              <div>
+                <h3>Channel Aktif</h3>
+                <p className="card-subtitle">{active.length} channel menyala</p>
+              </div>
+            </div>
+            {active.length === 0 ? (
+              <div className="channel-empty">
+                <span style={{ fontSize: 28, opacity: 0.4 }}>💤</span>
+                <span className="muted">Tidak ada channel menyala</span>
+              </div>
+            ) : (
+              <>
+                <div className="channel-list">
+                  {active.map((c) => (
+                    <div key={c.id} className="channel-item">
+                      <div className="channel-role-badge">{c.role === "pump" ? "🔌" : "🚰"} {c.role}</div>
+                      <div className="channel-detail">
+                        <span>Ch {c.channel}</span>
+                        <span className="muted">Run #{c.run_id}</span>
+                      </div>
+                      <div className="channel-times">
+                        <span className="channel-on">ON {toWIB(c.on_at)}</span>
+                        <span className="channel-off">OFF ~{toWIB(c.expected_off_at)}</span>
+                      </div>
+                      <span className={`channel-verified ${c.verified ? "yes" : "no"}`}>
+                        {c.verified ? "✓" : "—"}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+                {runningRunIds.length > 0 && (
+                  <div className="channel-actions">
+                    {runningRunIds.map((rid) => (
+                      <form key={rid} action={stopRunAction}>
+                        <input type="hidden" name="run_id" value={rid} />
+                        <SubmitButton className="danger" pendingText="Menghentikan…">
+                          ■ Stop #{rid}
+                        </SubmitButton>
+                      </form>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+
+          {/* ET0 + Soil charts — right 4 cols of row 3 */}
+          <ET0ChartSlot />
+          <SoilChartSlot />
+
+          {/* ── Row 4: Timeline (full width) ─────────────────────────── */}
+          <TimelineSlot />
+
+          {/* ── Row 5: Riwayat table (full width) ────────────────────── */}
+          <div className="dash-card glass-card" style={{ gridColumn: "span 6" }}>
+            <div className="card-header">
+              <div className="card-icon" style={{ background: "linear-gradient(135deg, #64748b, #475569)" }}>📜</div>
+              <div>
+                <h3>Riwayat Penyiraman</h3>
+                <p className="card-subtitle">10 run terakhir</p>
+              </div>
+            </div>
+            <div className="table-wrap">
+              <table className="modern-table">
+                <thead>
+                  <tr>
+                    <th>ID</th>
+                    <th>Trigger</th>
+                    <th>Mulai (WIB)</th>
+                    <th>Durasi</th>
+                    <th>Status</th>
+                    <th>ET0</th>
+                    <th>Soil</th>
+                    <th>Selesai</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {runs.map((r) => (
+                    <tr key={r.id}>
+                      <td><span className="run-id">#{r.id}</span></td>
+                      <td>
+                        <span className={`trigger-badge ${r.triggered_by}`}>
+                          {r.triggered_by === "schedule" ? "🕐" : "👆"} {r.triggered_by}
+                        </span>
+                      </td>
+                      <td>{toWIB(r.started_at)}</td>
+                      <td>{r.duration_minutes != null ? `${r.duration_minutes} mnt` : "—"}</td>
+                      <td>
+                        <span className={`badge-pill ${
+                          r.status === "completed" ? "badge-active"
+                            : r.status === "running" ? "badge-running"
+                            : r.status === "failed" ? "badge-danger"
+                            : "badge-inactive"
+                        }`}>
+                          <span className="badge-dot"></span>
+                          {r.status}
+                        </span>
+                      </td>
+                      <td>{r.et0 != null ? r.et0.toFixed(3) : "—"}</td>
+                      <td>{r.soil_avg != null ? `${r.soil_avg.toFixed(1)}%` : "—"}</td>
+                      <td>{toWIB(r.finished_at)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </div>
         </div>
-      ) : (
-        <div className="next-schedule disabled">
-          <div className="icon">📅</div>
-          <div className="info">
-            <div className="label">Jadwal berikutnya</div>
-            <div className="time">—</div>
-            <div className="countdown">Belum ada jadwal aktif</div>
-          </div>
-        </div>
-      )}
-
-      <div className="panel">
-        <h2 style={{ marginTop: 0 }}>Status terakhir</h2>
-        {lastRun ? (
-          <p style={{ margin: "4px 0" }}>
-            Run #{lastRun.id} ·{" "}
-            <span
-              className={`badge ${lastRun.status === "completed" || lastRun.status === "running" ? "on" : "off"}`}
-            >
-              {lastRun.status}
-            </span>{" "}
-            · {lastRun.triggered_by} · mulai {toWIB(lastRun.started_at)}
-            {lastRun.duration_minutes != null ? ` · ${lastRun.duration_minutes} mnt` : ""}
-            {lastRun.et0 != null ? ` · ET0 ${lastRun.et0.toFixed(3)}` : ""}
-            {lastRun.soil_avg != null ? ` · soil ${lastRun.soil_avg.toFixed(1)}%` : ""}
-          </p>
-        ) : (
-          <p className="muted">Belum ada run.</p>
-        )}
-        {lastEvent && (
-          <p className="muted" style={{ margin: "4px 0" }}>
-            Aktivitas terakhir: [{lastEvent.level}] {lastEvent.event} · {toWIB(lastEvent.ts)}
-          </p>
-        )}
-      </div>
-
-      <div className="panel">
-        <h2>Channel aktif</h2>
-        {active.length === 0 ? (
-          <p className="muted">Tidak ada channel menyala.</p>
-        ) : (
-          <div className="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Run</th>
-                  <th>Device</th>
-                  <th>Ch</th>
-                  <th>Role</th>
-                  <th>On at (WIB)</th>
-                  <th>Expected off (WIB)</th>
-                  <th>Verified</th>
-                </tr>
-              </thead>
-              <tbody>
-                {active.map((c) => (
-                  <tr key={c.id}>
-                    <td>#{c.run_id}</td>
-                    <td>{c.device_id}</td>
-                    <td>{c.channel}</td>
-                    <td>{c.role}</td>
-                    <td>{toWIB(c.on_at)}</td>
-                    <td>{toWIB(c.expected_off_at)}</td>
-                    <td>{c.verified ? "✓" : "—"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-        {runningRunIds.length > 0 && (
-          <div style={{ marginTop: 12, display: "flex", gap: 8, flexWrap: "wrap" }}>
-            {runningRunIds.map((rid) => (
-              <form key={rid} action={stopRunAction}>
-                <input type="hidden" name="run_id" value={rid} />
-                <SubmitButton className="danger" pendingText="Menghentikan…">
-                  ■ Stop run #{rid}
-                </SubmitButton>
-              </form>
-            ))}
-          </div>
-        )}
-      </div>
-
-      <div className="panel">
-        <h2>Riwayat penyiraman (10 terakhir)</h2>
-        <div className="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>ID</th>
-                <th>Trigger</th>
-                <th>Mulai (WIB)</th>
-                <th>Durasi</th>
-                <th>Status</th>
-                <th>ET0</th>
-                <th>Soil</th>
-                <th>Selesai</th>
-              </tr>
-            </thead>
-            <tbody>
-              {runs.map((r) => (
-                <tr key={r.id}>
-                  <td>{r.id}</td>
-                  <td>{r.triggered_by}</td>
-                  <td>{toWIB(r.started_at)}</td>
-                  <td>{r.duration_minutes != null ? `${r.duration_minutes} mnt` : "—"}</td>
-                  <td>
-                    <span
-                      className={`badge ${r.status === "running" ? "on" : "off"}`}
-                    >
-                      {r.status}
-                    </span>
-                  </td>
-                  <td>{r.et0 != null ? r.et0.toFixed(3) : "—"}</td>
-                  <td>{r.soil_avg != null ? r.soil_avg.toFixed(1) : "—"}</td>
-                  <td>{toWIB(r.finished_at)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      </DashboardDataProvider>
     </>
   );
 }
