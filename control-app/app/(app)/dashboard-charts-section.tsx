@@ -112,7 +112,9 @@ export function TimelineSlot() {
     <div className="dash-card glass-card" style={{ gridColumn: "span 6" }}>
       <div className="card-header-row">
         <div className="card-header">
-          <div className="card-icon" style={{ background: "linear-gradient(135deg, #f59e0b, #f97316)" }}>📊</div>
+          <div className="card-icon" style={{ background: "linear-gradient(135deg, #f59e0b, #f97316)" }}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+          </div>
           <div>
             <h3 style={{ display: "flex", alignItems: "center", gap: "8px" }}>
               Timeline Penyiraman
@@ -148,7 +150,9 @@ export function DurationChartSlot() {
     <div className="dash-card glass-card" style={{ gridColumn: "span 2" }}>
       <div className="card-header-row">
         <div className="card-header">
-          <div className="card-icon" style={{ background: "linear-gradient(135deg, #8b5cf6, #6366f1)" }}>⏱️</div>
+          <div className="card-icon" style={{ background: "linear-gradient(135deg, #8b5cf6, #6366f1)" }}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          </div>
           <div>
             <h3>Jadwal Penyiraman</h3>
             <p className="card-subtitle">Durasi (menit) · {days}H</p>
@@ -171,7 +175,9 @@ export function ET0ChartSlot() {
     <div className="dash-card glass-card" style={{ gridColumn: "span 2" }}>
       <div className="card-header-row">
         <div className="card-header">
-          <div className="card-icon" style={{ background: "linear-gradient(135deg, #06b6d4, #0ea5e9)" }}>🌡️</div>
+          <div className="card-icon" style={{ background: "linear-gradient(135deg, #06b6d4, #0ea5e9)" }}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0z"/><path d="M12 7v4"/></svg>
+          </div>
           <div>
             <h3>ET0</h3>
             <p className="card-subtitle">Evapotranspirasi (mm/jam) · {days}H</p>
@@ -195,7 +201,9 @@ export function SoilChartSlot() {
     <div className="dash-card glass-card" style={{ gridColumn: "span 2" }}>
       <div className="card-header-row">
         <div className="card-header">
-          <div className="card-icon" style={{ background: "linear-gradient(135deg, #10b981, #059669)" }}>🌱</div>
+          <div className="card-icon" style={{ background: "linear-gradient(135deg, #10b981, #059669)" }}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10Z"/><path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12"/></svg>
+          </div>
           <div>
             <h3>Lengas Tanah</h3>
             <p className="card-subtitle">Soil moisture (%) · {days}H</p>

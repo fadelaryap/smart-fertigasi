@@ -1,5 +1,6 @@
 import "./globals.css";
 import type { Metadata } from "next";
+import { ThemeToggle } from "./theme-toggle";
 
 export const metadata: Metadata = {
   title: "AgriHub Fertigation",
@@ -21,11 +22,22 @@ export default function RootLayout({
           href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
           rel="stylesheet"
         />
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              try {
+                var theme = localStorage.getItem('theme');
+                if (theme === 'light') document.documentElement.setAttribute('data-theme', 'light');
+              } catch (e) {}
+            `,
+          }}
+        />
       </head>
       <body>
         <nav className="topbar">
           <span className="brand">🌱 AgriHub Fertigation</span>
           <span className="muted" style={{ fontSize: 12, letterSpacing: "0.5px" }}>control panel</span>
+          <ThemeToggle />
         </nav>
         <main className="container">{children}</main>
       </body>
