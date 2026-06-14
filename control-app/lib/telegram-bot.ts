@@ -124,12 +124,9 @@ async function pollLoop(): Promise<void> {
       // Extract the underlying cause (e.g. DNS ENOTFOUND, ECONNREFUSED)
       const cause = (err as { cause?: unknown })?.cause;
       const detail = cause ? `${String(err)} — cause: ${String(cause)}` : String(err);
-      // Only log every Nth error to reduce spam when network is down
+      // Only log every Nth error to terminal to reduce console spam
       if (consecutiveErrors <= 3 || consecutiveErrors % 10 === 0) {
-        logEvent("warn", "telegram_poll_error", {
-          error: detail,
-          consecutiveErrors,
-        });
+        console.warn(`[telegram-bot] Poll error (x${consecutiveErrors}):`, detail);
       }
       const backoff = Math.min(BASE_BACKOFF * Math.pow(2, consecutiveErrors - 1), MAX_BACKOFF);
       await sleep(backoff);

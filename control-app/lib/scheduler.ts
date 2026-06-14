@@ -19,6 +19,7 @@ interface ScheduleRow {
 const g = globalThis as unknown as {
   __fertSchedulerTasks?: ScheduledTask[];
   __fertSchedulerStarted?: boolean;
+  __fertMaintenanceStarted?: boolean;
 };
 
 export interface SchedulerStatus {
@@ -81,4 +82,17 @@ export function startScheduler(): void {
   g.__fertSchedulerStarted = true;
   const status = reloadSchedules();
   logEvent("info", "scheduler_started", { count: status.count });
+
+  // Start daily maintenance job
+  if (!g.__fertMaintenanceStarted) {
+    g.__fertMaintenanceStarted = true;
+    cron.schedule("0 2 * * *", () => {
+      try {
+        const info = getDb().prepare("DELETE FROM event_log WHERE ts < datetime('now', '-30 days')").run();
+        console.log(`[maintenance] Deleted ${info.changes} old event_log entries.`);
+      } catch (err) {
+        console.error("[maintenance] Failed to prune event_log:", err);
+      }
+    });
+  }
 }
