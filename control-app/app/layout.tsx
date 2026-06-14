@@ -1,10 +1,22 @@
 import "./globals.css";
 import type { Metadata } from "next";
+import Image from "next/image";
 import { ThemeToggle } from "./theme-toggle";
+import logo from "./logo.webp";
 
 export const metadata: Metadata = {
   title: "AgriHub Fertigation",
   description: "Automated fertigation control panel",
+  robots: {
+    index: false,
+    follow: false,
+    nocache: true,
+    googleBot: {
+      index: false,
+      follow: false,
+      noimageindex: true,
+    },
+  },
 };
 
 export default function RootLayout({
@@ -35,8 +47,20 @@ export default function RootLayout({
       </head>
       <body>
         <nav className="topbar">
-          <span className="brand">🌱 AgriHub Fertigation</span>
-          <span className="muted" style={{ fontSize: 12, letterSpacing: "0.5px" }}>control panel</span>
+          <div className="topbar-left">
+            <Image
+              src={logo}
+              alt="AgriHub Logo"
+              width={50}
+              height={50}
+              style={{ objectFit: "contain" }}
+              priority
+            />
+            <div className="topbar-text">
+              <span className="brand">AgriHub Fertigation</span>
+              <span className="muted topbar-subtitle">control panel</span>
+            </div>
+          </div>
           <ThemeToggle />
         </nav>
         <main className="container">{children}</main>
