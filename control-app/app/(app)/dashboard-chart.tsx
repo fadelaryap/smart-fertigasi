@@ -267,48 +267,8 @@ export function MetricLineChart({
 
   const points = validPoints.map((p) => ({ x: xOf(p.t), y: yOf(p.value), ...p }));
 
-  // X-axis ticks: every 12 hours, showing date + time
-  const dayLines: { x: number; label: string; isMidnight: boolean }[] = [];
-  const startDay = new Date(tStart);
-  startDay.setUTCHours(0, 0, 0, 0);
-  // WIB midnight = UTC 17:00 previous day
-  const wibMidnight = new Date(startDay);
-  wibMidnight.setUTCHours(-7, 0, 0, 0);
-
-  for (let d = new Date(wibMidnight); d.getTime() <= tEnd + 24 * 3600000; d.setDate(d.getDate() + 1)) {
-    // Midnight WIB
-    const t0 = d.getTime();
-    if (t0 >= tStart && t0 <= tEnd) {
-      const wib = new Date(t0 + 7 * 3600000);
-      const dd = wib.getUTCDate().toString().padStart(2, "0");
-      const mm = (wib.getUTCMonth() + 1).toString().padStart(2, "0");
-      dayLines.push({ x: xOf(t0), label: `${dd}/${mm} 00:00`, isMidnight: true });
-    }
-    // 06:00 WIB
-    const t6 = d.getTime() + 6 * 3600000;
-    if (t6 >= tStart && t6 <= tEnd) {
-      const wib = new Date(t6 + 7 * 3600000);
-      const dd = wib.getUTCDate().toString().padStart(2, "0");
-      const mm = (wib.getUTCMonth() + 1).toString().padStart(2, "0");
-      dayLines.push({ x: xOf(t6), label: `${dd}/${mm} 06:00`, isMidnight: false });
-    }
-    // 12:00 WIB
-    const t12 = d.getTime() + 12 * 3600000;
-    if (t12 >= tStart && t12 <= tEnd) {
-      const wib = new Date(t12 + 7 * 3600000);
-      const dd = wib.getUTCDate().toString().padStart(2, "0");
-      const mm = (wib.getUTCMonth() + 1).toString().padStart(2, "0");
-      dayLines.push({ x: xOf(t12), label: `${dd}/${mm} 12:00`, isMidnight: false });
-    }
-    // 18:00 WIB
-    const t18 = d.getTime() + 18 * 3600000;
-    if (t18 >= tStart && t18 <= tEnd) {
-      const wib = new Date(t18 + 7 * 3600000);
-      const dd = wib.getUTCDate().toString().padStart(2, "0");
-      const mm = (wib.getUTCMonth() + 1).toString().padStart(2, "0");
-      dayLines.push({ x: xOf(t18), label: `${dd}/${mm} 18:00`, isMidnight: false });
-    }
-  }
+  // X-axis ticks: hourly grid lines, labels every 6h
+  const xTicks = buildXTicks(tStart, tEnd, xOf);
 
   // Y ticks
   const yTicks = 4;
@@ -332,7 +292,7 @@ export function MetricLineChart({
           return (
             <g key={i}>
               <line x1={padding.left} y1={y} x2={w - padding.right} y2={y}
-                stroke="var(--border)" strokeWidth="1" opacity="0.25" />
+                stroke="var(--border)" strokeWidth="1" opacity="0.35" />
               <text x={padding.left - 6} y={y + 4} fill="var(--muted)" fontSize="10"
                 textAnchor="end" fontFamily="inherit">
                 {val >= 100 ? val.toFixed(0) : val >= 10 ? val.toFixed(1) : val.toFixed(2)}
@@ -341,16 +301,21 @@ export function MetricLineChart({
           );
         })}
 
-        {/* X-axis: date + time labels */}
-        {dayLines.map((dl, i) => (
+        {/* X-axis: hourly grid + labeled ticks */}
+        {xTicks.map((tk, i) => (
           <g key={i}>
-            <line x1={dl.x} y1={padding.top} x2={dl.x} y2={padding.top + plotH}
-              stroke="var(--border)" strokeWidth={dl.isMidnight ? "1.5" : "1"}
-              strokeDasharray={dl.isMidnight ? "0" : "4 4"} opacity={dl.isMidnight ? 0.4 : 0.2} />
-            <text x={dl.x} y={h - 6} fill="var(--muted)" fontSize="9"
-              textAnchor="middle" fontFamily="inherit" fontWeight={dl.isMidnight ? "700" : "400"}>
-              {dl.label}
-            </text>
+            <line x1={tk.x} y1={padding.top} x2={tk.x} y2={padding.top + plotH}
+              stroke="var(--border)"
+              strokeWidth={tk.type === "midnight" ? "1.5" : "1"}
+              strokeDasharray={tk.type === "midnight" ? "0" : tk.type === "major" ? "4 4" : "2 4"}
+              opacity={tk.type === "midnight" ? 0.45 : tk.type === "major" ? 0.25 : 0.1} />
+            {tk.label && (
+              <text x={tk.x} y={h - 6} fill="var(--muted)" fontSize="9"
+                textAnchor="middle" fontFamily="inherit"
+                fontWeight={tk.type === "midnight" ? "700" : "400"}>
+                {tk.label}
+              </text>
+            )}
           </g>
         ))}
 
@@ -397,7 +362,7 @@ export function MetricLineChart({
         {points.length === 0 && (
           <text x={w / 2} y={h / 2} fill="var(--muted)" fontSize="13"
             textAnchor="middle" fontFamily="inherit">
-            Tidak ada data {label.toLowerCase()} dalam 3 hari
+            Tidak ada data {label.toLowerCase()}
           </text>
         )}
       </svg>
@@ -422,11 +387,45 @@ export function MetricLineChart({
           {label} ({unit})
         </span>
         <span className="legend-item muted" style={{ marginLeft: "auto", fontSize: 10 }}>
-          {points.length} data point · 3 hari
+          {points.length} data point
         </span>
       </div>
     </div>
   );
+}
+
+// ─── X-axis tick builder (hourly grid, labels every 6h) ───────────────────
+interface XTick { x: number; label: string | null; type: "midnight" | "major" | "minor" }
+
+function buildXTicks(
+  tStart: number, tEnd: number,
+  xOf: (t: number) => number,
+): XTick[] {
+  const ticks: XTick[] = [];
+  // Find first WIB hour at or before tStart
+  const WIB_OFF = 7 * 3600000;
+  const startHour = new Date(tStart);
+  startHour.setMinutes(0, 0, 0);
+  // Walk back to previous hour
+  while (startHour.getTime() > tStart - 3600000) startHour.setTime(startHour.getTime() - 3600000);
+
+  for (let t = startHour.getTime(); t <= tEnd; t += 3600000) {
+    if (t < tStart) continue;
+    const wib = new Date(t + WIB_OFF);
+    const hour = wib.getUTCHours();
+    const dd = wib.getUTCDate().toString().padStart(2, "0");
+    const mm = (wib.getUTCMonth() + 1).toString().padStart(2, "0");
+    const hh = hour.toString().padStart(2, "0");
+
+    if (hour === 0) {
+      ticks.push({ x: xOf(t), label: `${dd}/${mm} 00:00`, type: "midnight" });
+    } else if (hour % 6 === 0) {
+      ticks.push({ x: xOf(t), label: `${dd}/${mm} ${hh}:00`, type: "major" });
+    } else {
+      ticks.push({ x: xOf(t), label: null, type: "minor" });
+    }
+  }
+  return ticks;
 }
 
 // ─── Smooth path builder (Catmull-Rom → Bezier) ───────────────────────────
@@ -503,29 +502,8 @@ export function DualLineChart({
   const schedPoints = validPoints.map((p) => ({ x: xOf(p.t), y: yOf(p.scheduled), ...p }));
   const actualPoints = validPoints.map((p) => ({ x: xOf(p.t), y: yOf(p.actual), ...p }));
 
-  // X-axis ticks
-  const dayLines: { x: number; label: string; isMidnight: boolean }[] = [];
-  const startDay = new Date(tStart);
-  startDay.setUTCHours(0, 0, 0, 0);
-  const wibMidnight = new Date(startDay);
-  wibMidnight.setUTCHours(-7, 0, 0, 0);
-
-  for (let d = new Date(wibMidnight); d.getTime() <= tEnd + 24 * 3600000; d.setDate(d.getDate() + 1)) {
-    const t0 = d.getTime();
-    if (t0 >= tStart && t0 <= tEnd) {
-      const wib = new Date(t0 + 7 * 3600000);
-      const dd = wib.getUTCDate().toString().padStart(2, "0");
-      const mm = (wib.getUTCMonth() + 1).toString().padStart(2, "0");
-      dayLines.push({ x: xOf(t0), label: `${dd}/${mm} 00:00`, isMidnight: true });
-    }
-    const t12 = d.getTime() + 12 * 3600000;
-    if (t12 >= tStart && t12 <= tEnd) {
-      const wib = new Date(t12 + 7 * 3600000);
-      const dd = wib.getUTCDate().toString().padStart(2, "0");
-      const mm = (wib.getUTCMonth() + 1).toString().padStart(2, "0");
-      dayLines.push({ x: xOf(t12), label: `${dd}/${mm} 12:00`, isMidnight: false });
-    }
-  }
+  // X-axis ticks: hourly grid
+  const xTicks = buildXTicks(tStart, tEnd, xOf);
 
   // Y ticks
   const yTicks = 4;
@@ -550,7 +528,7 @@ export function DualLineChart({
           return (
             <g key={i}>
               <line x1={padding.left} y1={y} x2={w - padding.right} y2={y}
-                stroke="var(--border)" strokeWidth="1" opacity="0.25" />
+                stroke="var(--border)" strokeWidth="1" opacity="0.35" />
               <text x={padding.left - 6} y={y + 4} fill="var(--muted)" fontSize="10"
                 textAnchor="end" fontFamily="inherit">
                 {val >= 100 ? val.toFixed(0) : val >= 10 ? val.toFixed(1) : val.toFixed(2)}
@@ -559,16 +537,21 @@ export function DualLineChart({
           );
         })}
 
-        {/* X-axis */}
-        {dayLines.map((dl, i) => (
+        {/* X-axis: hourly grid + labeled ticks */}
+        {xTicks.map((tk, i) => (
           <g key={i}>
-            <line x1={dl.x} y1={padding.top} x2={dl.x} y2={padding.top + plotH}
-              stroke="var(--border)" strokeWidth={dl.isMidnight ? "1.5" : "1"}
-              strokeDasharray={dl.isMidnight ? "0" : "4 4"} opacity={dl.isMidnight ? 0.4 : 0.2} />
-            <text x={dl.x} y={h - 6} fill="var(--muted)" fontSize="9"
-              textAnchor="middle" fontFamily="inherit" fontWeight={dl.isMidnight ? "700" : "400"}>
-              {dl.label}
-            </text>
+            <line x1={tk.x} y1={padding.top} x2={tk.x} y2={padding.top + plotH}
+              stroke="var(--border)"
+              strokeWidth={tk.type === "midnight" ? "1.5" : "1"}
+              strokeDasharray={tk.type === "midnight" ? "0" : tk.type === "major" ? "4 4" : "2 4"}
+              opacity={tk.type === "midnight" ? 0.45 : tk.type === "major" ? 0.25 : 0.1} />
+            {tk.label && (
+              <text x={tk.x} y={h - 6} fill="var(--muted)" fontSize="9"
+                textAnchor="middle" fontFamily="inherit"
+                fontWeight={tk.type === "midnight" ? "700" : "400"}>
+                {tk.label}
+              </text>
+            )}
           </g>
         ))}
 
@@ -671,7 +654,7 @@ export function DualLineChart({
           Aktual (mnt)
         </span>
         <span className="legend-item muted" style={{ marginLeft: "auto", fontSize: 10 }}>
-          {validPoints.length} data point · 3 hari
+          {validPoints.length} data point
         </span>
       </div>
     </div>

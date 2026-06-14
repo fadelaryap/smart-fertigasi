@@ -82,7 +82,7 @@ th{color:var(--muted);font-weight:600;font-size:11px;text-transform:uppercase;le
 .dash-header-right{display:flex;gap:8px;align-items:center}
 
 /* ─── Bento Grid — 6 columns ────────────────────────────────────────────── */
-.dash-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:16px}
+.dash-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:16px;align-items:start}
 .dash-card{padding:20px;overflow:hidden}
 .card-sm{grid-column:span 1}
 .card-md{grid-column:span 2}
@@ -178,6 +178,14 @@ th{color:var(--muted);font-weight:600;font-size:11px;text-transform:uppercase;le
 .legend-dot{width:10px;height:10px;border-radius:3px;flex-shrink:0}
 .metric-chart-container{overflow-x:auto;position:relative}
 .metric-chart-svg{display:block}
+
+/* ─── Chart Range Toggle ─────────────────────────────────────────────────── */
+.card-header-row{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:16px}
+.card-header-row .card-header{margin-bottom:0}
+.chart-range-toggle{display:flex;gap:2px;background:rgba(255,255,255,0.04);border-radius:8px;padding:2px;flex-shrink:0}
+.chart-range-toggle button{padding:4px 10px;border-radius:6px;font-size:11px;font-weight:600;background:transparent;color:var(--muted);border:none;cursor:pointer;transition:all .2s;letter-spacing:.2px;min-width:32px}
+.chart-range-toggle button:hover{color:var(--text);background:rgba(255,255,255,0.06)}
+.chart-range-toggle button.active{background:rgba(88,166,255,0.15);color:var(--accent-2);box-shadow:0 1px 4px rgba(0,0,0,.2)}
 
 /* ─── Chart Tooltips ─────────────────────────────────────────────────────── */
 .chart-tooltip{position:absolute;z-index:20;pointer-events:none;background:var(--panel-solid);border:1px solid var(--border-hover);border-radius:10px;padding:10px 14px;font-size:12px;box-shadow:0 12px 32px rgba(0,0,0,.5);min-width:140px;animation:tt-in .15s ease}

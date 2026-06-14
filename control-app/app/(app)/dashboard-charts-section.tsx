@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from "react";
 import {
   IrrigationTimeline,
   MetricLineChart,
@@ -27,7 +27,7 @@ export function DashboardDataProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch("/api/dashboard-data")
+    fetch("/api/dashboard-data?days=3")
       .then((r) => r.json())
       .then((d) => { setData(d); setLoading(false); })
       .catch(() => setLoading(false));
@@ -48,17 +48,76 @@ function ChartShell({ children, loading }: { children: ReactNode; loading: boole
   return <>{children}</>;
 }
 
+// ─── Range Toggle ──────────────────────────────────────────────────────────
+const RANGE_OPTIONS = [
+  { label: "1H", days: 1 },
+  { label: "3H", days: 3 },
+  { label: "7H", days: 7 },
+];
+
+function RangeToggle({
+  value,
+  onChange,
+}: {
+  value: number;
+  onChange: (days: number) => void;
+}) {
+  return (
+    <div className="chart-range-toggle">
+      {RANGE_OPTIONS.map((opt) => (
+        <button
+          key={opt.days}
+          className={value === opt.days ? "active" : ""}
+          onClick={() => onChange(opt.days)}
+          type="button"
+        >
+          {opt.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// Hook to fetch chart data for a specific range
+function useChartData(days: number) {
+  const ctx = useContext(Ctx);
+  const [overrideData, setOverrideData] = useState<DashboardData | null>(null);
+  const [overrideLoading, setOverrideLoading] = useState(false);
+
+  useEffect(() => {
+    // Default 3d uses context data — no extra fetch needed
+    if (days === 3) {
+      setOverrideData(null);
+      return;
+    }
+    setOverrideLoading(true);
+    fetch(`/api/dashboard-data?days=${days}`)
+      .then((r) => r.json())
+      .then((d) => { setOverrideData(d); setOverrideLoading(false); })
+      .catch(() => setOverrideLoading(false));
+  }, [days]);
+
+  if (days === 3) {
+    return { data: ctx.data, loading: ctx.loading };
+  }
+  return { data: overrideData, loading: overrideLoading || ctx.loading };
+}
+
 // ─── Individual Chart Slots ────────────────────────────────────────────────
 export function TimelineSlot() {
-  const { data, loading } = useContext(Ctx);
+  const [days, setDays] = useState(3);
+  const { data, loading } = useChartData(days);
   return (
     <div className="dash-card glass-card" style={{ gridColumn: "span 6" }}>
-      <div className="card-header">
-        <div className="card-icon" style={{ background: "linear-gradient(135deg, #f59e0b, #f97316)" }}>📊</div>
-        <div>
-          <h3>Timeline Penyiraman</h3>
-          <p className="card-subtitle">Jadwal vs aktual · 3 hari terakhir</p>
+      <div className="card-header-row">
+        <div className="card-header">
+          <div className="card-icon" style={{ background: "linear-gradient(135deg, #f59e0b, #f97316)" }}>📊</div>
+          <div>
+            <h3>Timeline Penyiraman</h3>
+            <p className="card-subtitle">Jadwal vs aktual · {days} hari terakhir</p>
+          </div>
         </div>
+        <RangeToggle value={days} onChange={setDays} />
       </div>
       <ChartShell loading={loading}>
         {data && <IrrigationTimeline bars={data.bars} rangeStart={data.rangeStart} rangeEnd={data.rangeEnd} />}
@@ -68,15 +127,19 @@ export function TimelineSlot() {
 }
 
 export function DurationChartSlot() {
-  const { data, loading } = useContext(Ctx);
+  const [days, setDays] = useState(3);
+  const { data, loading } = useChartData(days);
   return (
     <div className="dash-card glass-card" style={{ gridColumn: "span 2" }}>
-      <div className="card-header">
-        <div className="card-icon" style={{ background: "linear-gradient(135deg, #8b5cf6, #6366f1)" }}>⏱️</div>
-        <div>
-          <h3>Jadwal vs Aktual</h3>
-          <p className="card-subtitle">Durasi penyiraman (menit)</p>
+      <div className="card-header-row">
+        <div className="card-header">
+          <div className="card-icon" style={{ background: "linear-gradient(135deg, #8b5cf6, #6366f1)" }}>⏱️</div>
+          <div>
+            <h3>Jadwal vs Aktual</h3>
+            <p className="card-subtitle">Durasi (menit) · {days}H</p>
+          </div>
         </div>
+        <RangeToggle value={days} onChange={setDays} />
       </div>
       <ChartShell loading={loading}>
         {data && <DualLineChart data={data.runDataPoints}
@@ -87,15 +150,19 @@ export function DurationChartSlot() {
 }
 
 export function ET0ChartSlot() {
-  const { data, loading } = useContext(Ctx);
+  const [days, setDays] = useState(3);
+  const { data, loading } = useChartData(days);
   return (
     <div className="dash-card glass-card" style={{ gridColumn: "span 2" }}>
-      <div className="card-header">
-        <div className="card-icon" style={{ background: "linear-gradient(135deg, #06b6d4, #0ea5e9)" }}>🌡️</div>
-        <div>
-          <h3>ET0</h3>
-          <p className="card-subtitle">Evapotranspirasi (mm/jam)</p>
+      <div className="card-header-row">
+        <div className="card-header">
+          <div className="card-icon" style={{ background: "linear-gradient(135deg, #06b6d4, #0ea5e9)" }}>🌡️</div>
+          <div>
+            <h3>ET0</h3>
+            <p className="card-subtitle">Evapotranspirasi (mm/jam) · {days}H</p>
+          </div>
         </div>
+        <RangeToggle value={days} onChange={setDays} />
       </div>
       <ChartShell loading={loading}>
         {data && <MetricLineChart data={data.runDataPoints} metricKey="et0"
@@ -107,19 +174,23 @@ export function ET0ChartSlot() {
 }
 
 export function SoilChartSlot() {
-  const { data, loading } = useContext(Ctx);
+  const [days, setDays] = useState(3);
+  const { data, loading } = useChartData(days);
   return (
     <div className="dash-card glass-card" style={{ gridColumn: "span 2" }}>
-      <div className="card-header">
-        <div className="card-icon" style={{ background: "linear-gradient(135deg, #10b981, #059669)" }}>🌱</div>
-        <div>
-          <h3>Kelembapan Tanah</h3>
-          <p className="card-subtitle">Soil moisture (%)</p>
+      <div className="card-header-row">
+        <div className="card-header">
+          <div className="card-icon" style={{ background: "linear-gradient(135deg, #10b981, #059669)" }}>🌱</div>
+          <div>
+            <h3>Lengas Tanah</h3>
+            <p className="card-subtitle">Soil moisture (%) · {days}H</p>
+          </div>
         </div>
+        <RangeToggle value={days} onChange={setDays} />
       </div>
       <ChartShell loading={loading}>
         {data && <MetricLineChart data={data.runDataPoints} metricKey="soilAvg"
-          label="Soil Avg" color="#10b981" unit="%"
+          label="Lengas" color="#10b981" unit="%"
           rangeStart={data.rangeStart} rangeEnd={data.rangeEnd} height={190} />}
       </ChartShell>
     </div>

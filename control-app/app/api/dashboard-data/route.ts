@@ -18,13 +18,17 @@ interface ScheduleRow {
   time: string;
 }
 
-export async function GET() {
+export async function GET(req: Request) {
   const db = getDb();
 
-  // Fixed 3-day window
+  // Accept ?days=N, default to 3
+  const url = new URL(req.url);
+  const days = Math.min(Math.max(Number(url.searchParams.get("days")) || 3, 1), 30);
+
+  // Dynamic time window
   const now = new Date();
   const rangeEnd = now.toISOString();
-  const rangeStart = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000).toISOString();
+  const rangeStart = new Date(now.getTime() - days * 24 * 60 * 60 * 1000).toISOString();
 
   // Get runs within last 3 days
   const runs = db

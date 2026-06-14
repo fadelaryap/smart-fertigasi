@@ -87,6 +87,10 @@ async function handleUpdate(token: string, update: any): Promise<void> {
 
 async function pollLoop(): Promise<void> {
   // Runs for the lifetime of the server process.
+  let consecutiveErrors = 0;
+  const BASE_BACKOFF = 10_000;    // 10 seconds
+  const MAX_BACKOFF  = 120_000;   // 2 minutes cap
+
   for (;;) {
     const token = getSetting("telegram_bot_token");
     if (!token) {
@@ -102,6 +106,8 @@ async function pollLoop(): Promise<void> {
         await sleep(10_000);
         continue;
       }
+      // Success — reset backoff counter
+      consecutiveErrors = 0;
       const updates: any[] = Array.isArray(res.result) ? res.result : [];
       let maxId = offset - 1;
       for (const upd of updates) {
@@ -113,9 +119,20 @@ async function pollLoop(): Promise<void> {
         }
       }
       if (updates.length) setSetting("telegram_update_offset", String(maxId + 1));
-    } catch (err) {
-      logEvent("warn", "telegram_poll_error", { error: String(err) });
-      await sleep(10_000);
+    } catch (err: unknown) {
+      consecutiveErrors++;
+      // Extract the underlying cause (e.g. DNS ENOTFOUND, ECONNREFUSED)
+      const cause = (err as { cause?: unknown })?.cause;
+      const detail = cause ? `${String(err)} — cause: ${String(cause)}` : String(err);
+      // Only log every Nth error to reduce spam when network is down
+      if (consecutiveErrors <= 3 || consecutiveErrors % 10 === 0) {
+        logEvent("warn", "telegram_poll_error", {
+          error: detail,
+          consecutiveErrors,
+        });
+      }
+      const backoff = Math.min(BASE_BACKOFF * Math.pow(2, consecutiveErrors - 1), MAX_BACKOFF);
+      await sleep(backoff);
     }
   }
 }
