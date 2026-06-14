@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { getDb, isSystemEnabled } from "@/lib/db";
 import { isDryRun } from "@/lib/ewelink";
 import { toWIB, getNextSchedule } from "@/lib/time";
@@ -36,13 +37,19 @@ interface RunRow {
   finished_at: string | null;
 }
 
-export default function Dashboard() {
+export default async function Dashboard(props: { searchParams?: Promise<{ [key: string]: string | string[] | undefined }> }) {
+  const searchParams = await props.searchParams;
+  const pageStr = searchParams?.page;
+  const page = typeof pageStr === "string" ? parseInt(pageStr, 10) : 1;
+  const limit = 10;
+  const offset = (page > 0 ? page - 1 : 0) * limit;
+
   const db = getDb();
   const active = db
     .prepare("SELECT * FROM channel_state WHERE state='on' ORDER BY run_id, role")
     .all() as ChannelRow[];
   const runs = db
-    .prepare("SELECT * FROM irrigation_runs ORDER BY id DESC LIMIT 10")
+    .prepare(`SELECT * FROM irrigation_runs ORDER BY id DESC LIMIT ${limit} OFFSET ${offset}`)
     .all() as RunRow[];
   const runningRunIds = [...new Set(active.map((c) => c.run_id))].filter(
     (x): x is number => x != null
@@ -55,6 +62,7 @@ export default function Dashboard() {
 
   // Stats
   const totalRuns = (db.prepare("SELECT COUNT(*) as cnt FROM irrigation_runs").get() as { cnt: number }).cnt;
+  const totalPages = Math.ceil(totalRuns / limit) || 1;
   const completedRuns = (db.prepare("SELECT COUNT(*) as cnt FROM irrigation_runs WHERE status='completed'").get() as { cnt: number }).cnt;
   const failedRuns = (db.prepare("SELECT COUNT(*) as cnt FROM irrigation_runs WHERE status='failed'").get() as { cnt: number }).cnt;
   const avgDuration = (db.prepare("SELECT AVG(duration_minutes) as avg FROM irrigation_runs WHERE duration_minutes IS NOT NULL").get() as { avg: number | null }).avg;
@@ -370,6 +378,30 @@ export default function Dashboard() {
                   ))}
                 </tbody>
               </table>
+            </div>
+            {/* Pagination Controls */}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "16px", borderTop: "1px solid var(--border)" }}>
+              {page > 1 ? (
+                <Link href={`/?page=${page - 1}`} className="btn-secondary" style={{ padding: "6px 12px", borderRadius: 6, textDecoration: "none", fontSize: 13, background: "var(--panel-solid)", border: "1px solid var(--border)", color: "var(--fg)" }}>
+                  &larr; Sebelumnya
+                </Link>
+              ) : (
+                <span className="btn-secondary muted" style={{ padding: "6px 12px", borderRadius: 6, fontSize: 13, background: "var(--panel-solid)", border: "1px solid var(--border)", opacity: 0.5 }}>
+                  &larr; Sebelumnya
+                </span>
+              )}
+              <span className="muted" style={{ fontSize: 13 }}>
+                Halaman {page} dari {totalPages}
+              </span>
+              {page < totalPages ? (
+                <Link href={`/?page=${page + 1}`} className="btn-secondary" style={{ padding: "6px 12px", borderRadius: 6, textDecoration: "none", fontSize: 13, background: "var(--panel-solid)", border: "1px solid var(--border)", color: "var(--fg)" }}>
+                  Selanjutnya &rarr;
+                </Link>
+              ) : (
+                <span className="btn-secondary muted" style={{ padding: "6px 12px", borderRadius: 6, fontSize: 13, background: "var(--panel-solid)", border: "1px solid var(--border)", opacity: 0.5 }}>
+                  Selanjutnya &rarr;
+                </span>
+              )}
             </div>
           </div>
         </div>
