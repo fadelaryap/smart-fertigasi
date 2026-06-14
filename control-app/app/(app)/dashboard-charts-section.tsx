@@ -106,6 +106,7 @@ function useChartData(days: number) {
 // ─── Individual Chart Slots ────────────────────────────────────────────────
 export function TimelineSlot() {
   const [days, setDays] = useState(3);
+  const [isVisible, setIsVisible] = useState(true);
   const { data, loading } = useChartData(days);
   return (
     <div className="dash-card glass-card" style={{ gridColumn: "span 6" }}>
@@ -113,15 +114,29 @@ export function TimelineSlot() {
         <div className="card-header">
           <div className="card-icon" style={{ background: "linear-gradient(135deg, #f59e0b, #f97316)" }}>📊</div>
           <div>
-            <h3>Timeline Penyiraman</h3>
+            <h3 style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              Timeline Penyiraman
+              <button
+                onClick={() => setIsVisible(!isVisible)}
+                style={{
+                  fontSize: "10px", padding: "2px 6px", borderRadius: "4px",
+                  background: "rgba(255,255,255,0.05)", border: "1px solid var(--border)",
+                  color: "var(--muted)", cursor: "pointer"
+                }}
+              >
+                {isVisible ? "Sembunyikan" : "Tampilkan"}
+              </button>
+            </h3>
             <p className="card-subtitle">Jadwal vs aktual · {days} hari terakhir</p>
           </div>
         </div>
         <RangeToggle value={days} onChange={setDays} />
       </div>
-      <ChartShell loading={loading}>
-        {data && <IrrigationTimeline bars={data.bars} rangeStart={data.rangeStart} rangeEnd={data.rangeEnd} />}
-      </ChartShell>
+      {isVisible && (
+        <ChartShell loading={loading}>
+          {data && <IrrigationTimeline bars={data.bars} rangeStart={data.rangeStart} rangeEnd={data.rangeEnd} />}
+        </ChartShell>
+      )}
     </div>
   );
 }
@@ -135,7 +150,7 @@ export function DurationChartSlot() {
         <div className="card-header">
           <div className="card-icon" style={{ background: "linear-gradient(135deg, #8b5cf6, #6366f1)" }}>⏱️</div>
           <div>
-            <h3>Jadwal vs Aktual</h3>
+            <h3>Jadwal Penyiraman</h3>
             <p className="card-subtitle">Durasi (menit) · {days}H</p>
           </div>
         </div>

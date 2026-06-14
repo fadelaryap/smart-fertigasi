@@ -85,7 +85,7 @@ export function IrrigationTimeline({
   const xScale = (min: number) => labelWidth + ((min - minTime) / timeRange) * chartWidth;
 
   const ticks: number[] = [];
-  const tickStep = timeRange > 180 ? 60 : 30;
+  const tickStep = timeRange > 720 ? 180 : timeRange > 360 ? 120 : timeRange > 180 ? 60 : 30;
   for (let t = Math.ceil(minTime / tickStep) * tickStep; t <= maxTime; t += tickStep) {
     ticks.push(t);
   }
@@ -486,11 +486,12 @@ export function DualLineChart({
       scheduled: d.scheduledDurationMinutes,
       actual: d.actualDurationMinutes,
       data: d,
-    }));
+    }))
+    .sort((a,b) => a.t - b.t);
 
   // Y range across both series
   const allVals = validPoints.flatMap((p) => [p.scheduled, p.actual]);
-  const yMin = allVals.length ? Math.min(...allVals) : 0;
+  const yMin = 0;
   const yMax = allVals.length ? Math.max(...allVals) : 1;
   const yRange = yMax - yMin || 1;
   const yPad = yRange * 0.15;
@@ -499,8 +500,40 @@ export function DualLineChart({
   const yOf = (v: number) =>
     padding.top + plotH - ((v - (yMin - yPad)) / (yRange + yPad * 2)) * plotH;
 
-  const schedPoints = validPoints.map((p) => ({ x: xOf(p.t), y: yOf(p.scheduled), ...p }));
-  const actualPoints = validPoints.map((p) => ({ x: xOf(p.t), y: yOf(p.actual), ...p }));
+  const schedLinePoints: {x: number, y: number}[] = [];
+  const actualLinePoints: {x: number, y: number}[] = [];
+  
+  schedLinePoints.push({ x: xOf(tStart), y: yOf(0) });
+  actualLinePoints.push({ x: xOf(tStart), y: yOf(0) });
+
+  validPoints.forEach(p => {
+    const tS = p.t;
+    const durS = p.scheduled;
+    const tPeakS = tS + (durS * 60000) / 2;
+    const tEndS = tS + durS * 60000;
+
+    schedLinePoints.push({ x: xOf(tS - 1000), y: yOf(0) });
+    schedLinePoints.push({ x: xOf(tS), y: yOf(0) });
+    schedLinePoints.push({ x: xOf(tPeakS), y: yOf(durS) });
+    schedLinePoints.push({ x: xOf(tEndS), y: yOf(0) });
+    schedLinePoints.push({ x: xOf(tEndS + 1000), y: yOf(0) });
+
+    const durA = p.actual;
+    const tPeakA = tS + (durA * 60000) / 2;
+    const tEndA = tS + durA * 60000;
+
+    actualLinePoints.push({ x: xOf(tS - 1000), y: yOf(0) });
+    actualLinePoints.push({ x: xOf(tS), y: yOf(0) });
+    actualLinePoints.push({ x: xOf(tPeakA), y: yOf(durA) });
+    actualLinePoints.push({ x: xOf(tEndA), y: yOf(0) });
+    actualLinePoints.push({ x: xOf(tEndA + 1000), y: yOf(0) });
+  });
+
+  schedLinePoints.push({ x: xOf(tEnd), y: yOf(0) });
+  actualLinePoints.push({ x: xOf(tEnd), y: yOf(0) });
+
+  const schedPoints = validPoints.map((p) => ({ x: xOf(p.t + (p.scheduled * 60000) / 2), y: yOf(p.scheduled), ...p }));
+  const actualPoints = validPoints.map((p) => ({ x: xOf(p.t + (p.actual * 60000) / 2), y: yOf(p.actual), ...p }));
 
   // X-axis ticks: hourly grid
   const xTicks = buildXTicks(tStart, tEnd, xOf);
@@ -556,9 +589,9 @@ export function DualLineChart({
         ))}
 
         {/* Scheduled duration: area + line */}
-        {schedPoints.length >= 2 && (() => {
-          const pathD = buildSmoothPath(schedPoints);
-          const fillPath = `${pathD} L ${schedPoints[schedPoints.length - 1].x},${padding.top + plotH} L ${schedPoints[0].x},${padding.top + plotH} Z`;
+        {schedLinePoints.length >= 2 && (() => {
+          const pathD = buildSmoothPath(schedLinePoints);
+          const fillPath = `${pathD} L ${schedLinePoints[schedLinePoints.length - 1].x},${padding.top + plotH} L ${schedLinePoints[0].x},${padding.top + plotH} Z`;
           return (
             <g>
               <defs>
@@ -575,9 +608,9 @@ export function DualLineChart({
         })()}
 
         {/* Actual duration: area + line */}
-        {actualPoints.length >= 2 && (() => {
-          const pathD = buildSmoothPath(actualPoints);
-          const fillPath = `${pathD} L ${actualPoints[actualPoints.length - 1].x},${padding.top + plotH} L ${actualPoints[0].x},${padding.top + plotH} Z`;
+        {actualLinePoints.length >= 2 && (() => {
+          const pathD = buildSmoothPath(actualLinePoints);
+          const fillPath = `${pathD} L ${actualLinePoints[actualLinePoints.length - 1].x},${padding.top + plotH} L ${actualLinePoints[0].x},${padding.top + plotH} Z`;
           return (
             <g>
               <defs>

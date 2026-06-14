@@ -82,8 +82,8 @@ th{color:var(--muted);font-weight:600;font-size:11px;text-transform:uppercase;le
 .dash-header-right{display:flex;gap:8px;align-items:center}
 
 /* ─── Bento Grid — 6 columns ────────────────────────────────────────────── */
-.dash-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:16px;align-items:start}
-.dash-card{padding:20px;overflow:hidden}
+.dash-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:16px;align-items:stretch}
+.dash-card{padding:20px;overflow:hidden;display:flex;flex-direction:column;position:relative}
 .card-sm{grid-column:span 1}
 .card-md{grid-column:span 2}
 .card-chart{grid-column:span 2}
@@ -167,7 +167,7 @@ th{color:var(--muted);font-weight:600;font-size:11px;text-transform:uppercase;le
 
 /* ─── Charts ─────────────────────────────────────────────────────────────── */
 .chart-loading{display:flex;align-items:center;justify-content:center;gap:10px;padding:40px;color:var(--muted);font-size:14px}
-.timeline-container{overflow-x:auto;padding:4px 0;position:relative}
+.timeline-container{overflow:hidden;padding:4px 0;position:relative;flex:1}
 .timeline-svg{display:block}
 .timeline-bar-sched{transition:opacity .2s}
 .timeline-bar-actual{transition:opacity .2s}
@@ -176,7 +176,7 @@ th{color:var(--muted);font-weight:600;font-size:11px;text-transform:uppercase;le
 .timeline-legend,.chart-legend{display:flex;gap:16px;padding:8px 0 0;font-size:11px;color:var(--muted);flex-wrap:wrap}
 .legend-item{display:flex;align-items:center;gap:5px}
 .legend-dot{width:10px;height:10px;border-radius:3px;flex-shrink:0}
-.metric-chart-container{overflow-x:auto;position:relative}
+.metric-chart-container{overflow:hidden;position:relative;flex:1}
 .metric-chart-svg{display:block}
 
 /* ─── Chart Range Toggle ─────────────────────────────────────────────────── */
