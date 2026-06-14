@@ -191,7 +191,7 @@ export function IrrigationTimeline({
 
       {/* Floating tooltip */}
       {hoveredIdx !== null && bars[hoveredIdx] && (
-        <div className="chart-tooltip" style={{ left: mousePos.x + 12, top: mousePos.y - 10 }}>
+        <div className="chart-tooltip" style={{ left: mousePos.x > chartWidth - 140 ? mousePos.x - 160 : mousePos.x + 12, top: mousePos.y - 10 }}>
           <div className="tt-title">{bars[hoveredIdx].date}</div>
           <div className="tt-row">
             <span className="tt-dot" style={{ background: "#f59e0b" }}></span>
@@ -282,8 +282,8 @@ export function MetricLineChart({
 
   const points = validPoints.map((p) => ({ x: xOf(p.t), y: yOf(p.value), ...p }));
 
-  // X-axis ticks: hourly grid lines, labels every 6h
-  const xTicks = buildXTicks(tStart, tEnd, xOf);
+  // X-axis ticks: hourly grid lines, labels responsive to width
+  const xTicks = buildXTicks(tStart, tEnd, xOf, plotW);
 
   // Y ticks
   const yTicks = 4;
@@ -392,8 +392,10 @@ export function MetricLineChart({
 
         {/* Tooltip */}
         {hoveredPoint && (
-          <div className="chart-tooltip" style={{ left: mousePos.x + 12, top: mousePos.y - 10 }}>
-            <div className="tt-title">{hoveredPoint.data.date}</div>
+          <div className="chart-tooltip" style={{ left: mousePos.x > dims.w - 180 ? mousePos.x - 170 : mousePos.x + 12, top: mousePos.y - 10 }}>
+            <div className="tt-title">
+              {new Date(hoveredPoint.data.startedAtIso).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }).replace(/\./g, ':')} WIB
+            </div>
             <div className="tt-row">
               <span className="tt-dot" style={{ background: color }}></span>
               {label}: <strong>{hoveredPoint.value >= 10 ? hoveredPoint.value.toFixed(1) : hoveredPoint.value.toFixed(3)}</strong> {unit}
@@ -424,6 +426,7 @@ interface XTick { x: number; dateLine: string | null; timeLine: string | null; t
 function buildXTicks(
   tStart: number, tEnd: number,
   xOf: (t: number) => number,
+  plotW: number
 ): XTick[] {
   const ticks: XTick[] = [];
   // Find first WIB hour at or before tStart
@@ -432,6 +435,16 @@ function buildXTicks(
   startHour.setMinutes(0, 0, 0);
   // Walk back to previous hour
   while (startHour.getTime() > tStart - 3600000) startHour.setTime(startHour.getTime() - 3600000);
+
+  const hours = (tEnd - tStart) / 3600000;
+  const maxLabels = Math.max(2, Math.floor(plotW / 60));
+  let labelInterval = Math.ceil(hours / maxLabels);
+  if (labelInterval <= 1) labelInterval = 1;
+  else if (labelInterval <= 2) labelInterval = 2;
+  else if (labelInterval <= 3) labelInterval = 3;
+  else if (labelInterval <= 6) labelInterval = 6;
+  else if (labelInterval <= 12) labelInterval = 12;
+  else labelInterval = 24;
 
   for (let t = startHour.getTime(); t <= tEnd; t += 3600000) {
     if (t < tStart) continue;
@@ -443,7 +456,7 @@ function buildXTicks(
 
     if (hour === 0) {
       ticks.push({ x: xOf(t), dateLine: `${dd}/${mm}`, timeLine: "00:00", type: "midnight" });
-    } else if (hour % 6 === 0) {
+    } else if (hour % labelInterval === 0) {
       ticks.push({ x: xOf(t), dateLine: `${dd}/${mm}`, timeLine: `${hh}:00`, type: "major" });
     } else {
       ticks.push({ x: xOf(t), dateLine: null, timeLine: null, type: "minor" });
@@ -499,6 +512,8 @@ export function DualLineChart({
   const dims = useChartDimensions(containerRef, height);
   const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
+  const [showSched, setShowSched] = useState(true);
+  const [showActual, setShowActual] = useState(true);
 
   const padding = { top: 20, right: 16, bottom: 54, left: 48 };
   const w = dims.w;
@@ -524,7 +539,12 @@ export function DualLineChart({
     .sort((a,b) => a.t - b.t);
 
   // Y range across both series
-  const allVals = validPoints.flatMap((p) => [p.scheduled, p.actual]);
+  const allVals = validPoints.flatMap((p) => {
+    const vals = [];
+    if (showSched) vals.push(p.scheduled);
+    if (showActual) vals.push(p.actual);
+    return vals;
+  });
   const yMin = 0;
   const yMax = allVals.length ? Math.max(...allVals) : 1;
   const yRange = yMax - yMin || 1;
@@ -566,7 +586,7 @@ export function DualLineChart({
   const actualPoints = validPoints.map((p) => ({ x: xOf(p.t + (p.actual * 60000) / 2), y: yOf(p.actual), ...p }));
 
   // X-axis ticks: hourly grid
-  const xTicks = buildXTicks(tStart, tEnd, xOf);
+  const xTicks = buildXTicks(tStart, tEnd, xOf, plotW);
 
   // Y ticks
   const yTicks = 4;
@@ -627,7 +647,7 @@ export function DualLineChart({
           ))}
 
           {/* Scheduled duration: area + line */}
-          {schedLinePoints.length >= 2 && (() => {
+          {showSched && schedLinePoints.length >= 2 && (() => {
             const pathD = buildMountainPath(schedLinePoints);
             const fillPath = `${pathD} L ${schedLinePoints[schedLinePoints.length - 1].x},${padding.top + plotH} L ${schedLinePoints[0].x},${padding.top + plotH} Z`;
             return (
@@ -646,7 +666,7 @@ export function DualLineChart({
           })()}
 
           {/* Actual duration: area + line */}
-          {actualLinePoints.length >= 2 && (() => {
+          {showActual && actualLinePoints.length >= 2 && (() => {
             const pathD = buildMountainPath(actualLinePoints);
             const fillPath = `${pathD} L ${actualLinePoints[actualLinePoints.length - 1].x},${padding.top + plotH} L ${actualLinePoints[0].x},${padding.top + plotH} Z`;
             return (
@@ -665,14 +685,14 @@ export function DualLineChart({
           })()}
 
           {/* Data points — scheduled */}
-          {schedPoints.map((p, i) => (
+          {showSched && schedPoints.map((p, i) => (
             <circle key={`s${i}`} cx={p.x} cy={p.y} r={hoveredIdx === i ? 6 : 3.5}
               fill={schedColor} stroke="var(--panel-solid)" strokeWidth="2"
               onMouseEnter={() => setHoveredIdx(i)} onMouseLeave={() => setHoveredIdx(null)}
               style={{ cursor: "pointer", transition: "r 0.15s ease" }} />
           ))}
           {/* Data points — actual */}
-          {actualPoints.map((p, i) => (
+          {showActual && actualPoints.map((p, i) => (
             <circle key={`a${i}`} cx={p.x} cy={p.y} r={hoveredIdx === i ? 6 : 3.5}
               fill={actualColor} stroke="var(--panel-solid)" strokeWidth="2"
               onMouseEnter={() => setHoveredIdx(i)} onMouseLeave={() => setHoveredIdx(null)}
@@ -699,16 +719,22 @@ export function DualLineChart({
 
         {/* Tooltip */}
         {hoveredIdx !== null && validPoints[hoveredIdx] && (
-          <div className="chart-tooltip" style={{ left: mousePos.x + 12, top: mousePos.y - 10 }}>
-            <div className="tt-title">{validPoints[hoveredIdx].data.date}</div>
-            <div className="tt-row">
-              <span className="tt-dot" style={{ background: schedColor }}></span>
-              Jadwal: <strong>{validPoints[hoveredIdx].scheduled.toFixed(1)}</strong> mnt
+          <div className="chart-tooltip" style={{ left: mousePos.x > dims.w - 180 ? mousePos.x - 170 : mousePos.x + 12, top: mousePos.y - 10 }}>
+            <div className="tt-title">
+              {new Date(validPoints[hoveredIdx].data.startedAtIso).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }).replace(/\./g, ':')} WIB
             </div>
-            <div className="tt-row">
-              <span className="tt-dot" style={{ background: actualColor }}></span>
-              Aktual: <strong>{validPoints[hoveredIdx].actual.toFixed(1)}</strong> mnt
-            </div>
+            {showSched && (
+              <div className="tt-row">
+                <span className="tt-dot" style={{ background: schedColor }}></span>
+                Jadwal: <strong>{validPoints[hoveredIdx].scheduled.toFixed(1)}</strong> mnt
+              </div>
+            )}
+            {showActual && (
+              <div className="tt-row">
+                <span className="tt-dot" style={{ background: actualColor }}></span>
+                Aktual: <strong>{validPoints[hoveredIdx].actual.toFixed(1)}</strong> mnt
+              </div>
+            )}
             <div className="tt-row muted" style={{ fontSize: 10 }}>
               Status: {validPoints[hoveredIdx].data.status}
             </div>
@@ -717,11 +743,11 @@ export function DualLineChart({
       </div>
 
       <div className="chart-legend" style={{ marginTop: 8 }}>
-        <span className="legend-item">
+        <span className="legend-item" onClick={() => setShowSched(!showSched)} style={{ cursor: "pointer", opacity: showSched ? 1 : 0.4 }}>
           <span className="legend-dot" style={{ background: schedColor }}></span>
           Jadwal (mnt)
         </span>
-        <span className="legend-item">
+        <span className="legend-item" onClick={() => setShowActual(!showActual)} style={{ cursor: "pointer", opacity: showActual ? 1 : 0.4 }}>
           <span className="legend-dot" style={{ background: actualColor }}></span>
           Aktual (mnt)
         </span>

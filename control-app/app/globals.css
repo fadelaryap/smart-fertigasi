@@ -223,6 +223,11 @@ th{color:var(--muted);font-weight:600;font-size:11px;text-transform:uppercase;le
 .spinner{display:inline-block;width:14px;height:14px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:spin .6s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
 
+/* ─── Skeleton Loading ───────────────────────────────────────────────────── */
+.skeleton{background:linear-gradient(90deg,rgba(255,255,255,0.03) 25%,rgba(255,255,255,0.08) 50%,rgba(255,255,255,0.03) 75%);background-size:200% 100%;animation:skeleton-load 1.5s infinite;border-radius:8px}
+[data-theme="light"] .skeleton{background:linear-gradient(90deg,rgba(0,0,0,0.04) 25%,rgba(0,0,0,0.08) 50%,rgba(0,0,0,0.04) 75%);background-size:200% 100%}
+@keyframes skeleton-load{0%{background-position:200% 0}100%{background-position:-200% 0}}
+
 /* ─── Old compat (used by other pages) ───────────────────────────────────── */
 .next-schedule{display:flex;align-items:center;gap:12px;padding:14px 20px;background:linear-gradient(135deg,rgba(63,185,80,0.08),rgba(88,166,255,0.08));border:1px solid rgba(63,185,80,0.25);border-radius:8px;margin-bottom:16px}
 .next-schedule .icon{font-size:28px;line-height:1;flex-shrink:0}

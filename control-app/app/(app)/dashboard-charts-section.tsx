@@ -39,9 +39,12 @@ export function DashboardDataProvider({ children }: { children: ReactNode }) {
 function ChartShell({ children, loading }: { children: ReactNode; loading: boolean }) {
   if (loading) {
     return (
-      <div className="chart-loading">
-        <span className="spinner" style={{ width: 18, height: 18 }}></span>
-        <span>Memuat…</span>
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '16px', padding: '10px 0', minHeight: '190px' }}>
+        <div className="skeleton" style={{ flex: 1, width: '100%' }}></div>
+        <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
+          <div className="skeleton" style={{ height: '14px', width: '80px' }}></div>
+          <div className="skeleton" style={{ height: '14px', width: '80px' }}></div>
+        </div>
       </div>
     );
   }
