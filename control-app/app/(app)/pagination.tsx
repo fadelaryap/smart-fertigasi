@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
-export function FilterForm({ basePath, startDate, endDate, sort, resetPath }: { basePath: string, startDate: string, endDate: string, sort: string, resetPath: string }) {
+export function FilterForm({ basePath, startDate, endDate, sort, q, resetPath, csvPath }: { basePath: string, startDate: string, endDate: string, sort: string, q?: string, resetPath: string, csvPath?: string }) {
   const router = useRouter();
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
@@ -13,9 +13,11 @@ export function FilterForm({ basePath, startDate, endDate, sort, resetPath }: { 
     const sd = formData.get("startDate") as string;
     const ed = formData.get("endDate") as string;
     const s = formData.get("sort") as string;
+    const query = formData.get("q") as string;
     if (sd) sp.set("startDate", sd);
     if (ed) sp.set("endDate", ed);
     if (s) sp.set("sort", s);
+    if (query) sp.set("q", query);
     
     router.push(`${basePath}?${sp.toString()}`, { scroll: false });
   };
@@ -35,8 +37,17 @@ export function FilterForm({ basePath, startDate, endDate, sort, resetPath }: { 
           <option value="asc">Terlama</option>
         </select>
       </div>
+      <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
+        <input type="text" name="q" placeholder="Cari..." defaultValue={q} style={{ padding: "6px 8px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--bg)", color: "var(--fg)", width: "140px" }} />
+      </div>
       <button type="submit" className="btn-secondary" style={{ padding: "6px 16px", borderRadius: 6, background: "var(--panel-solid)", border: "1px solid var(--border)", color: "var(--fg)", cursor: "pointer" }}>Filter</button>
       <Link href={resetPath} scroll={false} className="btn-secondary muted" style={{ padding: "6px 16px", borderRadius: 6, textDecoration: "none", background: "transparent", border: "1px solid transparent" }}>Reset</Link>
+      
+      {csvPath && (
+        <a href={`${csvPath}?${new URLSearchParams({ ...(startDate && {startDate}), ...(endDate && {endDate}), ...(sort && {sort}), ...(q && {q}) }).toString()}`} className="btn-secondary" style={{ marginLeft: "auto", padding: "6px 16px", borderRadius: 6, textDecoration: "none", background: "var(--primary)", border: "none", color: "#fff" }}>
+          Export CSV
+        </a>
+      )}
     </form>
   );
 }

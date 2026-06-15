@@ -1,7 +1,7 @@
 import { getDb } from "@/lib/db";
 import { toWIB } from "@/lib/time";
 import { SubmitButton } from "../../submit-button";
-import { updateSettings } from "./actions";
+import { updateSettings, clearEventLogs } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -124,7 +124,31 @@ export default function SettingsPage() {
         <Field name="safety_max_minutes" label="Safety cutoff (menit)" value={s.safety_max_minutes ?? "60"} type="number" hint="Cutoff absolut watchdog (default 60)." />
       </div>
 
+      <div className="panel" style={{ background: "var(--bg)" }}>
+        <h3>Mode Uji Coba (Dry-Run)</h3>
+        <div>
+          <label htmlFor="ewelink_dry_run" style={{ display: "block", marginBottom: "8px", fontWeight: "bold" }}>Status Sistem</label>
+          <select id="ewelink_dry_run" name="ewelink_dry_run" defaultValue={s.ewelink_dry_run !== "0" ? "1" : "0"} style={{ width: "100%", padding: "10px", borderRadius: "6px", background: "var(--panel-solid)", color: "var(--fg)", border: "1px solid var(--border)" }}>
+            <option value="1">Aktif (Mode Simulasi / Dry Run)</option>
+            <option value="0">Nonaktif (Mode Live / Pompa Nyala Beneran)</option>
+          </select>
+          <p className="muted" style={{ fontSize: 12, marginTop: 6 }}>
+            Jika aktif, sistem berjalan normal di dashboard namun perintah ke eWeLink tidak akan dikirim.
+          </p>
+        </div>
+      </div>
+
       <SubmitButton pendingText="Menyimpan…">Simpan settings</SubmitButton>
+      </form>
+
+      <form action={clearEventLogs} className="panel" style={{ background: "var(--bg)", borderColor: "var(--danger)" }}>
+        <h3 style={{ color: "var(--danger)", margin: 0 }}>Hapus Semua Log</h3>
+        <p className="muted" style={{ fontSize: 13 }}>
+          Mengosongkan semua riwayat penyiraman dan event log secara manual. Data yang dihapus tidak dapat dikembalikan.
+        </p>
+        <SubmitButton pendingText="Menghapus..." style={{ background: "var(--danger)", color: "#fff", borderColor: "var(--danger)" }}>
+          Hapus Permanen
+        </SubmitButton>
       </form>
 
       <Subscribers />

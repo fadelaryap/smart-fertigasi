@@ -7,7 +7,14 @@
 import { getDb, getSetting, setSetting, logEvent } from "./db";
 import { nowIso } from "./time";
 
-const g = globalThis as unknown as { __fertBotStarted?: boolean };
+const g = globalThis as unknown as { 
+  __fertBotStarted?: boolean;
+  __telegramBotStatus?: "idle" | "ok" | "error";
+};
+
+export function getTelegramBotStatus() {
+  return g.__telegramBotStatus || "idle";
+}
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -94,6 +101,7 @@ async function pollLoop(): Promise<void> {
   for (;;) {
     const token = getSetting("telegram_bot_token");
     if (!token) {
+      g.__telegramBotStatus = "idle";
       await sleep(15_000); // idle until a token is configured in the UI
       continue;
     }
@@ -101,12 +109,14 @@ async function pollLoop(): Promise<void> {
     try {
       const res = await api(token, "getUpdates", { offset, timeout: 30 });
       if (!res?.ok) {
+        g.__telegramBotStatus = "error";
         // e.g. 409 Conflict (another getUpdates / webhook set), invalid token, etc.
         logEvent("warn", "telegram_poll_not_ok", { description: res?.description });
         await sleep(10_000);
         continue;
       }
       // Success — reset backoff counter
+      g.__telegramBotStatus = "ok";
       consecutiveErrors = 0;
       const updates: any[] = Array.isArray(res.result) ? res.result : [];
       let maxId = offset - 1;
@@ -120,6 +130,7 @@ async function pollLoop(): Promise<void> {
       }
       if (updates.length) setSetting("telegram_update_offset", String(maxId + 1));
     } catch (err: unknown) {
+      g.__telegramBotStatus = "error";
       consecutiveErrors++;
       // Extract the underlying cause (e.g. DNS ENOTFOUND, ECONNREFUSED)
       const cause = (err as { cause?: unknown })?.cause;

@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { setSetting } from "@/lib/db";
+import { setSetting, getDb } from "@/lib/db";
 
 // Scalar settings editable from the UI. eWeLink creds are intentionally NOT here —
 // they live only in .env. (Local const — a "use server" file may only EXPORT
@@ -20,6 +20,7 @@ const SCALAR_KEYS = [
   "weather_rh_channel",
   "weather_wind_channel",
   "weather_radiation_channel",
+  "ewelink_dry_run",
 ];
 
 export async function updateSettings(formData: FormData) {
@@ -33,5 +34,11 @@ export async function updateSettings(formData: FormData) {
     .map((c) => String(c))
     .filter(Boolean);
   setSetting("soil_channels", soil.join(","));
+  revalidatePath("/settings");
+}
+
+export async function clearEventLogs() {
+  getDb().prepare("DELETE FROM event_log").run();
+  revalidatePath("/logs");
   revalidatePath("/settings");
 }

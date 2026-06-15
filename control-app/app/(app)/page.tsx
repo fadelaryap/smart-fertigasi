@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { getDb, isSystemEnabled } from "@/lib/db";
 import { isDryRun } from "@/lib/ewelink";
+import { getTelegramBotStatus } from "@/lib/telegram-bot";
 import { toWIB, getNextSchedule } from "@/lib/time";
 import { runNowAction, stopRunAction, toggleSystemAction } from "./actions";
 import { SubmitButton } from "../submit-button";
@@ -109,6 +110,12 @@ export default async function Dashboard(props: { searchParams?: Promise<{ [key: 
             <span className={`badge-pill ${isDryRun() ? "badge-warn" : "badge-live"}`}>
               {isDryRun() ? "DRY-RUN" : "LIVE"}
             </span>
+            {getTelegramBotStatus() !== "idle" && (
+              <span className={`badge-pill ${getTelegramBotStatus() === "ok" ? "badge-active" : "badge-danger"}`} title="Status koneksi Telegram Bot">
+                <span className="badge-dot"></span>
+                TELEGRAM {getTelegramBotStatus().toUpperCase()}
+              </span>
+            )}
           </div>
         </div>
         <div className="dash-header-right">
@@ -354,7 +361,7 @@ export default async function Dashboard(props: { searchParams?: Promise<{ [key: 
               </div>
             </div>
             
-            <FilterForm basePath="/" startDate={startDate} endDate={endDate} sort={sort} resetPath="/" />
+            <FilterForm basePath="/" startDate={startDate} endDate={endDate} sort={sort} resetPath="/" csvPath="/api/runs/csv" />
 
             <div className="table-wrap">
               <table className="modern-table">

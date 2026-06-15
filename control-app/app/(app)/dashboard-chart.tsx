@@ -603,7 +603,7 @@ export function DualLineChart({
   const actualColor = "#8b5cf6";
 
   return (
-    <div className="metric-chart-container" onMouseMove={handleMouseMove} style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
+    <div className="metric-chart-container" onMouseMove={handleMouseMove} style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: "250px" }}>
       <div ref={containerRef} style={{ flex: 1, position: "relative", minHeight: 0 }}>
         <svg style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%" }} viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" className="metric-chart-svg">
           {/* Y grid + labels */}

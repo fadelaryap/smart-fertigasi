@@ -10,8 +10,7 @@
 //  - One connection is created lazily and reused (login/token is cached on the
 //    instance) instead of re-logging-in on every call.
 import { requireEnv, optionalEnv } from "./env";
-import { logEvent } from "./db";
-import { getDb } from "./db";
+import { logEvent, getDb, getSetting } from "./db";
 
 // ewelink-api (old, skydiver) is CommonJS and ships no types.
 import ewelink from "ewelink-api";
@@ -22,7 +21,8 @@ let connection: any | null = null;
 
 export function isDryRun(): boolean {
   // Anything other than an explicit "0" keeps dry-run ON (fail-safe).
-  return optionalEnv("EWELINK_DRY_RUN", "1") !== "0";
+  const val = getSetting("ewelink_dry_run");
+  return val !== "0";
 }
 
 function getConnection(): any {
