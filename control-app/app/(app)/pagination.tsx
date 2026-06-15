@@ -1,8 +1,27 @@
+"use client";
+
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 export function FilterForm({ basePath, startDate, endDate, sort, resetPath }: { basePath: string, startDate: string, endDate: string, sort: string, resetPath: string }) {
+  const router = useRouter();
+
+  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const formData = new FormData(e.currentTarget);
+    const sp = new URLSearchParams();
+    const sd = formData.get("startDate") as string;
+    const ed = formData.get("endDate") as string;
+    const s = formData.get("sort") as string;
+    if (sd) sp.set("startDate", sd);
+    if (ed) sp.set("endDate", ed);
+    if (s) sp.set("sort", s);
+    
+    router.push(`${basePath}?${sp.toString()}`, { scroll: false });
+  };
+
   return (
-    <form action={basePath} method="GET" style={{ display: "flex", gap: "10px", padding: "12px 16px", borderBottom: "1px solid var(--border)", alignItems: "center", flexWrap: "wrap" }}>
+    <form onSubmit={handleSubmit} style={{ display: "flex", gap: "10px", padding: "12px 16px", borderBottom: "1px solid var(--border)", alignItems: "center", flexWrap: "wrap" }}>
       <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
         <span className="muted" style={{ fontSize: 13 }}>Tgl:</span>
         <input type="date" name="startDate" defaultValue={startDate} style={{ padding: "6px 8px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--bg)", color: "var(--fg)" }} />
@@ -17,7 +36,7 @@ export function FilterForm({ basePath, startDate, endDate, sort, resetPath }: { 
         </select>
       </div>
       <button type="submit" className="btn-secondary" style={{ padding: "6px 16px", borderRadius: 6, background: "var(--panel-solid)", border: "1px solid var(--border)", color: "var(--fg)", cursor: "pointer" }}>Filter</button>
-      <Link href={resetPath} className="btn-secondary muted" style={{ padding: "6px 16px", borderRadius: 6, textDecoration: "none", background: "transparent", border: "1px solid transparent" }}>Reset</Link>
+      <Link href={resetPath} scroll={false} className="btn-secondary muted" style={{ padding: "6px 16px", borderRadius: 6, textDecoration: "none", background: "transparent", border: "1px solid transparent" }}>Reset</Link>
     </form>
   );
 }
@@ -44,7 +63,7 @@ export function Pagination({ page, totalPages, basePath, searchParams }: { page:
   return (
     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "16px", borderTop: "1px solid var(--border)" }}>
       {page > 1 ? (
-        <Link href={getPageUrl(page - 1)} className="btn-secondary" style={{ padding: "6px 12px", borderRadius: 6, textDecoration: "none", fontSize: 13, background: "var(--panel-solid)", border: "1px solid var(--border)", color: "var(--fg)" }}>
+        <Link href={getPageUrl(page - 1)} scroll={false} className="btn-secondary" style={{ padding: "6px 12px", borderRadius: 6, textDecoration: "none", fontSize: 13, background: "var(--panel-solid)", border: "1px solid var(--border)", color: "var(--fg)" }}>
           &larr; Prev
         </Link>
       ) : (
@@ -56,14 +75,14 @@ export function Pagination({ page, totalPages, basePath, searchParams }: { page:
       <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
         {pages.map((p, i) => (
           p === "..." ? <span key={i} className="muted" style={{ padding: "0 4px" }}>...</span> :
-          <Link key={i} href={getPageUrl(p as number)} style={{ padding: "4px 10px", borderRadius: 6, textDecoration: "none", fontSize: 13, background: p === page ? "var(--primary)" : "var(--panel-solid)", color: p === page ? "#fff" : "var(--fg)", border: p === page ? "none" : "1px solid var(--border)", fontWeight: p === page ? "bold" : "normal" }}>
+          <Link key={i} href={getPageUrl(p as number)} scroll={false} style={{ padding: "4px 10px", borderRadius: 6, textDecoration: "none", fontSize: 13, background: p === page ? "var(--primary)" : "var(--panel-solid)", color: p === page ? "#fff" : "var(--fg)", border: p === page ? "none" : "1px solid var(--border)", fontWeight: p === page ? "bold" : "normal" }}>
             {p}
           </Link>
         ))}
       </div>
 
       {page < totalPages ? (
-        <Link href={getPageUrl(page + 1)} className="btn-secondary" style={{ padding: "6px 12px", borderRadius: 6, textDecoration: "none", fontSize: 13, background: "var(--panel-solid)", border: "1px solid var(--border)", color: "var(--fg)" }}>
+        <Link href={getPageUrl(page + 1)} scroll={false} className="btn-secondary" style={{ padding: "6px 12px", borderRadius: 6, textDecoration: "none", fontSize: 13, background: "var(--panel-solid)", border: "1px solid var(--border)", color: "var(--fg)" }}>
           Next &rarr;
         </Link>
       ) : (
