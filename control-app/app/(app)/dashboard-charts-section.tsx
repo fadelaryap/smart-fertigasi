@@ -27,10 +27,16 @@ export function DashboardDataProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch("/api/dashboard-data?days=3")
-      .then((r) => r.json())
-      .then((d) => { setData(d); setLoading(false); })
-      .catch(() => setLoading(false));
+    const fetchData = () => {
+      fetch("/api/dashboard-data?days=3")
+        .then((r) => r.json())
+        .then((d) => { setData(d); setLoading(false); })
+        .catch(() => setLoading(false));
+    };
+    fetchData();
+
+    window.addEventListener("dashboard-refresh", fetchData);
+    return () => window.removeEventListener("dashboard-refresh", fetchData);
   }, []);
 
   return <Ctx.Provider value={{ data, loading }}>{children}</Ctx.Provider>;
@@ -93,11 +99,17 @@ function useChartData(days: number) {
       setOverrideData(null);
       return;
     }
-    setOverrideLoading(true);
-    fetch(`/api/dashboard-data?days=${days}`)
-      .then((r) => r.json())
-      .then((d) => { setOverrideData(d); setOverrideLoading(false); })
-      .catch(() => setOverrideLoading(false));
+    const fetchOverride = () => {
+      setOverrideLoading(true);
+      fetch(`/api/dashboard-data?days=${days}`)
+        .then((r) => r.json())
+        .then((d) => { setOverrideData(d); setOverrideLoading(false); })
+        .catch(() => setOverrideLoading(false));
+    };
+    fetchOverride();
+
+    window.addEventListener("dashboard-refresh", fetchOverride);
+    return () => window.removeEventListener("dashboard-refresh", fetchOverride);
   }, [days]);
 
   if (days === 3) {

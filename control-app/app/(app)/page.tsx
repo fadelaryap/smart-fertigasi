@@ -14,6 +14,7 @@ import {
   TimelineSlot,
 } from "./dashboard-charts-section";
 import { FilterForm, Pagination } from "./pagination";
+import { LiveRefresh } from "./live-refresh";
 
 export const dynamic = "force-dynamic";
 
@@ -98,6 +99,7 @@ export default async function Dashboard(props: { searchParams?: Promise<{ [key: 
 
   return (
     <>
+      <LiveRefresh />
       {/* ─── Header ────────────────────────────────────────────────────── */}
       <div className="dash-header-new">
         <div className="dash-header-left">
