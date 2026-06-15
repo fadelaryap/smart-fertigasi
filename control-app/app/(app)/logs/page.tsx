@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { getDb } from "@/lib/db";
 import { toWIB } from "@/lib/time";
+import { FilterForm, Pagination } from "../pagination";
 
 export const dynamic = "force-dynamic";
 
@@ -22,21 +23,42 @@ export default async function LogsPage(props: { searchParams?: Promise<{ [key: s
   const searchParams = await props.searchParams;
   const pageStr = searchParams?.page;
   const page = typeof pageStr === "string" ? parseInt(pageStr, 10) : 1;
+  const startDate = typeof searchParams?.startDate === "string" ? searchParams.startDate : "";
+  const endDate = typeof searchParams?.endDate === "string" ? searchParams.endDate : "";
+  const sort = typeof searchParams?.sort === "string" ? searchParams.sort : "desc";
   const limit = 150;
   const offset = (page > 0 ? page - 1 : 0) * limit;
 
+  let whereClause = "1=1";
+  const params: any[] = [];
+  if (startDate) {
+    whereClause += " AND date(ts) >= ?";
+    params.push(startDate);
+  }
+  if (endDate) {
+    whereClause += " AND date(ts) <= ?";
+    params.push(endDate);
+  }
+  const orderClause = sort === "asc" ? "ASC" : "DESC";
+
   const db = getDb();
-  const totalLogs = (db.prepare("SELECT COUNT(*) as cnt FROM event_log").get() as { cnt: number }).cnt;
+  const totalLogs = (db.prepare(`SELECT COUNT(*) as cnt FROM event_log WHERE ${whereClause}`).get(...params) as { cnt: number }).cnt;
   const totalPages = Math.ceil(totalLogs / limit) || 1;
 
   const rows = db
-    .prepare(`SELECT id, ts, level, event, detail FROM event_log ORDER BY id DESC LIMIT ${limit} OFFSET ${offset}`)
-    .all() as EventRow[];
+    .prepare(`SELECT id, ts, level, event, detail FROM event_log WHERE ${whereClause} ORDER BY id ${orderClause} LIMIT ${limit} OFFSET ${offset}`)
+    .all(...params) as EventRow[];
 
   return (
     <div className="panel">
       <h1>Event log</h1>
       <p className="muted">Total {totalLogs} entri (menampilkan {limit} entri per halaman).</p>
+
+      <div style={{ background: "var(--panel-bg)", borderRadius: 8, border: "1px solid var(--border)", marginBottom: 16 }}>
+        <FilterForm basePath="/logs" startDate={startDate} endDate={endDate} sort={sort} resetPath="/logs" />
+        <Pagination page={page} totalPages={totalPages} basePath="/logs" searchParams={searchParams || {}} />
+      </div>
+
       <div className="table-wrap">
       <table>
         <thead>
@@ -63,29 +85,9 @@ export default async function LogsPage(props: { searchParams?: Promise<{ [key: s
         </tbody>
       </table>
       </div>
-      {/* Pagination Controls */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "16px 0", marginTop: "16px", borderTop: "1px solid var(--border)" }}>
-        {page > 1 ? (
-          <Link href={`/logs?page=${page - 1}`} className="btn-secondary" style={{ padding: "6px 12px", borderRadius: 6, textDecoration: "none", fontSize: 13, background: "var(--panel-solid)", border: "1px solid var(--border)", color: "var(--fg)" }}>
-            &larr; Sebelumnya
-          </Link>
-        ) : (
-          <span className="btn-secondary muted" style={{ padding: "6px 12px", borderRadius: 6, fontSize: 13, background: "var(--panel-solid)", border: "1px solid var(--border)", opacity: 0.5 }}>
-            &larr; Sebelumnya
-          </span>
-        )}
-        <span className="muted" style={{ fontSize: 13 }}>
-          Halaman {page} dari {totalPages}
-        </span>
-        {page < totalPages ? (
-          <Link href={`/logs?page=${page + 1}`} className="btn-secondary" style={{ padding: "6px 12px", borderRadius: 6, textDecoration: "none", fontSize: 13, background: "var(--panel-solid)", border: "1px solid var(--border)", color: "var(--fg)" }}>
-            Selanjutnya &rarr;
-          </Link>
-        ) : (
-          <span className="btn-secondary muted" style={{ padding: "6px 12px", borderRadius: 6, fontSize: 13, background: "var(--panel-solid)", border: "1px solid var(--border)", opacity: 0.5 }}>
-            Selanjutnya &rarr;
-          </span>
-        )}
+      
+      <div style={{ background: "var(--panel-bg)", borderRadius: 8, border: "1px solid var(--border)", marginTop: 16 }}>
+        <Pagination page={page} totalPages={totalPages} basePath="/logs" searchParams={searchParams || {}} />
       </div>
     </div>
   );

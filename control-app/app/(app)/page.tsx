@@ -12,6 +12,7 @@ import {
   SoilChartSlot,
   TimelineSlot,
 } from "./dashboard-charts-section";
+import { FilterForm, Pagination } from "./pagination";
 
 export const dynamic = "force-dynamic";
 
@@ -41,16 +42,31 @@ export default async function Dashboard(props: { searchParams?: Promise<{ [key: 
   const searchParams = await props.searchParams;
   const pageStr = searchParams?.page;
   const page = typeof pageStr === "string" ? parseInt(pageStr, 10) : 1;
+  const startDate = typeof searchParams?.startDate === "string" ? searchParams.startDate : "";
+  const endDate = typeof searchParams?.endDate === "string" ? searchParams.endDate : "";
+  const sort = typeof searchParams?.sort === "string" ? searchParams.sort : "desc";
   const limit = 10;
   const offset = (page > 0 ? page - 1 : 0) * limit;
+
+  let whereClause = "1=1";
+  const params: any[] = [];
+  if (startDate) {
+    whereClause += " AND date(started_at) >= ?";
+    params.push(startDate);
+  }
+  if (endDate) {
+    whereClause += " AND date(started_at) <= ?";
+    params.push(endDate);
+  }
+  const orderClause = sort === "asc" ? "ASC" : "DESC";
 
   const db = getDb();
   const active = db
     .prepare("SELECT * FROM channel_state WHERE state='on' ORDER BY run_id, role")
     .all() as ChannelRow[];
   const runs = db
-    .prepare(`SELECT * FROM irrigation_runs ORDER BY id DESC LIMIT ${limit} OFFSET ${offset}`)
-    .all() as RunRow[];
+    .prepare(`SELECT * FROM irrigation_runs WHERE ${whereClause} ORDER BY id ${orderClause} LIMIT ${limit} OFFSET ${offset}`)
+    .all(...params) as RunRow[];
   const runningRunIds = [...new Set(active.map((c) => c.run_id))].filter(
     (x): x is number => x != null
   );
@@ -61,8 +77,10 @@ export default async function Dashboard(props: { searchParams?: Promise<{ [key: 
     .get() as { ts: string; level: string; event: string } | undefined;
 
   // Stats
-  const totalRuns = (db.prepare("SELECT COUNT(*) as cnt FROM irrigation_runs").get() as { cnt: number }).cnt;
-  const totalPages = Math.ceil(totalRuns / limit) || 1;
+  const totalRunsQuery = db.prepare("SELECT COUNT(*) as cnt FROM irrigation_runs").get() as { cnt: number };
+  const totalRuns = totalRunsQuery.cnt;
+  const totalRunsFiltered = (db.prepare(`SELECT COUNT(*) as cnt FROM irrigation_runs WHERE ${whereClause}`).get(...params) as { cnt: number }).cnt;
+  const totalPages = Math.ceil(totalRunsFiltered / limit) || 1;
   const completedRuns = (db.prepare("SELECT COUNT(*) as cnt FROM irrigation_runs WHERE status='completed'").get() as { cnt: number }).cnt;
   const failedRuns = (db.prepare("SELECT COUNT(*) as cnt FROM irrigation_runs WHERE status='failed'").get() as { cnt: number }).cnt;
   const avgDuration = (db.prepare("SELECT AVG(duration_minutes) as avg FROM irrigation_runs WHERE duration_minutes IS NOT NULL").get() as { avg: number | null }).avg;
@@ -332,9 +350,12 @@ export default async function Dashboard(props: { searchParams?: Promise<{ [key: 
               </div>
               <div>
                 <h3>Riwayat Penyiraman</h3>
-                <p className="card-subtitle">10 run terakhir</p>
+                <p className="card-subtitle">Menampilkan {totalRunsFiltered} run</p>
               </div>
             </div>
+            
+            <FilterForm basePath="/" startDate={startDate} endDate={endDate} sort={sort} resetPath="/" />
+
             <div className="table-wrap">
               <table className="modern-table">
                 <thead>
@@ -379,30 +400,7 @@ export default async function Dashboard(props: { searchParams?: Promise<{ [key: 
                 </tbody>
               </table>
             </div>
-            {/* Pagination Controls */}
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "16px", borderTop: "1px solid var(--border)" }}>
-              {page > 1 ? (
-                <Link href={`/?page=${page - 1}`} className="btn-secondary" style={{ padding: "6px 12px", borderRadius: 6, textDecoration: "none", fontSize: 13, background: "var(--panel-solid)", border: "1px solid var(--border)", color: "var(--fg)" }}>
-                  &larr; Sebelumnya
-                </Link>
-              ) : (
-                <span className="btn-secondary muted" style={{ padding: "6px 12px", borderRadius: 6, fontSize: 13, background: "var(--panel-solid)", border: "1px solid var(--border)", opacity: 0.5 }}>
-                  &larr; Sebelumnya
-                </span>
-              )}
-              <span className="muted" style={{ fontSize: 13 }}>
-                Halaman {page} dari {totalPages}
-              </span>
-              {page < totalPages ? (
-                <Link href={`/?page=${page + 1}`} className="btn-secondary" style={{ padding: "6px 12px", borderRadius: 6, textDecoration: "none", fontSize: 13, background: "var(--panel-solid)", border: "1px solid var(--border)", color: "var(--fg)" }}>
-                  Selanjutnya &rarr;
-                </Link>
-              ) : (
-                <span className="btn-secondary muted" style={{ padding: "6px 12px", borderRadius: 6, fontSize: 13, background: "var(--panel-solid)", border: "1px solid var(--border)", opacity: 0.5 }}>
-                  Selanjutnya &rarr;
-                </span>
-              )}
-            </div>
+            <Pagination page={page} totalPages={totalPages} basePath="/" searchParams={searchParams || {}} />
           </div>
         </div>
       </DashboardDataProvider>

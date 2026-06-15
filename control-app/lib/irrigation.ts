@@ -14,7 +14,7 @@
 import { getDb, getSetting, logEvent, isSystemEnabled } from "./db";
 import { setPowerState, verifyState, isDryRun } from "./ewelink";
 import { sendTelegram } from "./telegram";
-import { nowIso, isoPlusMinutes } from "./time";
+import { nowIso, isoPlusMinutes, toWIB } from "./time";
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -156,7 +156,7 @@ export async function runIrrigation(p: RunParams) {
   const soils = p.soil_avg != null ? p.soil_avg.toFixed(1) : "-";
   await sendTelegram(
     "info",
-    `Penyiraman dimulai (run #${runId}) — durasi ${duration} mnt, ET0 ${et0s} mm/jam, soil ${soils}%. Mati otomatis ~${expectedOff}.`
+    `Penyiraman dimulai (run #${runId}) — durasi ${duration} mnt, ET0 ${et0s} mm/jam, soil ${soils}%. Mati otomatis ~${toWIB(expectedOff)}.`
   );
 
   return {
