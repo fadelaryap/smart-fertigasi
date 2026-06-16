@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { getDb, isSystemEnabled } from "@/lib/db";
+import { getDb, isSystemEnabled, getSetting } from "@/lib/db";
 import { isDryRun } from "@/lib/ewelink";
 import { getTelegramBotStatus } from "@/lib/telegram-bot";
 import { toWIB, getNextSchedule } from "@/lib/time";
