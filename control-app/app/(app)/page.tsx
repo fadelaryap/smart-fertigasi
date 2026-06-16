@@ -72,6 +72,10 @@ export default async function Dashboard(props: { searchParams?: Promise<{ [key: 
   const runningRunIds = [...new Set(active.map((c) => c.run_id))].filter(
     (x): x is number => x != null
   );
+
+  const brainRunningStr = getSetting("brain_running");
+  const isBrainRunning = brainRunningStr ? (Date.now() - new Date(brainRunningStr).getTime() < 60000) : false;
+  const isBusy = runningRunIds.length > 0 || isBrainRunning;
   const enabled = isSystemEnabled();
   const lastRun = runs[0];
   const lastEvent = db
@@ -123,6 +127,7 @@ export default async function Dashboard(props: { searchParams?: Promise<{ [key: 
         <div className="dash-header-right">
           <form action={toggleSystemAction}>
             <SubmitButton
+              disabled={isBusy}
               className={enabled ? "danger" : ""}
               pendingText={enabled ? "Menonaktifkan…" : "Mengaktifkan…"}
             >
@@ -130,7 +135,7 @@ export default async function Dashboard(props: { searchParams?: Promise<{ [key: 
             </SubmitButton>
           </form>
           <form action={runNowAction}>
-            <SubmitButton disabled={!enabled} pendingText="Menjalankan…">
+            <SubmitButton disabled={!enabled || isBusy} pendingText="Menjalankan…">
               ▶ Run now
             </SubmitButton>
           </form>
