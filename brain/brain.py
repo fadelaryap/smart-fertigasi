@@ -54,12 +54,33 @@ def fetch_latest(base: str, device_id: str) -> dict:
     return data
 
 
-def _channel(data: dict, channel: str, label: str) -> float:
+def _weather_channel(data: dict, channel: str, label: str) -> float:
+    """Read a weather channel value. Rejects None and 0 (0 = device baru nyala)."""
     if not channel:
         raise RuntimeError(f"channel untuk '{label}' belum dipetakan di settings.")
     if channel not in data:
         raise RuntimeError(f"{label}: channel '{channel}' tidak ada di respons agrihub.")
-    return float(data[channel])
+    raw = data[channel]
+    if raw is None:
+        raise RuntimeError(f"{label}: channel '{channel}' bernilai null di respons agrihub.")
+    val = float(raw)
+    if val == 0:
+        raise RuntimeError(
+            f"{label}: channel '{channel}' bernilai 0 (kemungkinan device baru nyala, "
+            f"data belum valid)."
+        )
+    return val
+
+
+def _soil_channel_value(data: dict, channel: str) -> float | None:
+    """Read a soil channel value. Returns None if null or 0 (invalid)."""
+    raw = data.get(channel)
+    if raw is None:
+        return None
+    val = float(raw)
+    if val == 0:
+        return None  # 0 dianggap error sensor
+    return val
 
 
 def read_sensors(conn) -> dict:
@@ -70,21 +91,43 @@ def read_sensors(conn) -> dict:
     weather = fetch_latest(base, db.get_setting(conn, "agrihub_weather_device_id") or "")
     soil = fetch_latest(base, db.get_setting(conn, "agrihub_soil_device_id") or "")
 
-    temp = _channel(weather, db.get_setting(conn, "weather_temp_channel") or "", "temperature")
-    rh = _channel(weather, db.get_setting(conn, "weather_rh_channel") or "", "relative_humidity")
-    wind = _channel(weather, db.get_setting(conn, "weather_wind_channel") or "", "wind_speed")
-    rad = _channel(weather, db.get_setting(conn, "weather_radiation_channel") or "", "solar_radiation")
+    temp = _weather_channel(weather, db.get_setting(conn, "weather_temp_channel") or "", "temperature")
+    rh = _weather_channel(weather, db.get_setting(conn, "weather_rh_channel") or "", "relative_humidity")
+    wind = _weather_channel(weather, db.get_setting(conn, "weather_wind_channel") or "", "wind_speed")
+    rad = _weather_channel(weather, db.get_setting(conn, "weather_radiation_channel") or "", "solar_radiation")
 
     soil_channels = [c.strip() for c in (db.get_setting(conn, "soil_channels") or "").split(",") if c.strip()]
     if not soil_channels:
         raise RuntimeError("soil_channels belum dipilih di settings.")
-    soil_vals = [_channel(soil, c, f"soil {c}") for c in soil_channels]
+
+    # Ambil nilai soil yang valid saja (bukan None, bukan 0)
+    soil_vals = []
+    skipped = []
+    for c in soil_channels:
+        val = _soil_channel_value(soil, c)
+        if val is not None:
+            soil_vals.append(val)
+        else:
+            skipped.append(c)
+
+    if not soil_vals:
+        raise RuntimeError(
+            f"Semua soil channel ({', '.join(soil_channels)}) bernilai null atau 0 — "
+            f"tidak ada data valid untuk dihitung."
+        )
+
+    if skipped:
+        print(f"[brain] soil channel diabaikan (null/0): {', '.join(skipped)}")
+
     soil_moisture = sum(soil_vals) / len(soil_vals)
 
     return {
         "temperature": temp, "relative_humidity": rh, "wind_speed": wind,
         "solar_radiation": rad, "soil_moisture": soil_moisture,
-        "soil_channels": soil_channels, "weather_raw": weather, "soil_raw": soil,
+        "soil_channels": soil_channels,
+        "soil_channels_used": len(soil_vals),
+        "soil_channels_skipped": skipped,
+        "weather_raw": weather, "soil_raw": soil,
     }
 # ─────────────────────────────────────────────────────────────────────────────
 
