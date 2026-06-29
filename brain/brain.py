@@ -9,7 +9,8 @@ Usage:
 Flow:
   1. Build the fuzzy controller from the DB fuzzy_config row (rebuilt every run,
      so UI changes take effect without code changes).
-  2. Read sensors from agrihub, soil_moisture = avg(s0, s1, s2).
+  2. Read sensors from agrihub. soil_moisture = avg of the soil channels picked
+     in Settings ('soil_channels'); channels that read null/0 are skipped.
   3. duration = controller.compute(...).
   4. duration == 0 -> log 'skipped' + Telegram skip notice -> done.
   5. duration  > 0 -> POST /api/run to the Control App (which runs the ON sequence).
@@ -55,7 +56,13 @@ def fetch_latest(base: str, device_id: str) -> dict:
 
 
 def _weather_channel(data: dict, channel: str, label: str) -> float:
-    """Read a weather channel value. Rejects None and 0 (0 = device baru nyala)."""
+    """Read a weather channel value.
+
+    0 is allowed for a single channel (e.g. solar_radiation = 0 at night is
+    real). The "device baru nyala / data belum valid" case — where the device
+    reports 0 on *every* channel — is caught in read_sensors, not here.
+    Only mapping/data errors (channel unset, missing, or null) fail.
+    """
     if not channel:
         raise RuntimeError(f"channel untuk '{label}' belum dipetakan di settings.")
     if channel not in data:
@@ -63,13 +70,7 @@ def _weather_channel(data: dict, channel: str, label: str) -> float:
     raw = data[channel]
     if raw is None:
         raise RuntimeError(f"{label}: channel '{channel}' bernilai null di respons agrihub.")
-    val = float(raw)
-    if val == 0:
-        raise RuntimeError(
-            f"{label}: channel '{channel}' bernilai 0 (kemungkinan device baru nyala, "
-            f"data belum valid)."
-        )
-    return val
+    return float(raw)
 
 
 def _soil_channel_value(data: dict, channel: str) -> float | None:
@@ -95,6 +96,14 @@ def read_sensors(conn) -> dict:
     rh = _weather_channel(weather, db.get_setting(conn, "weather_rh_channel") or "", "relative_humidity")
     wind = _weather_channel(weather, db.get_setting(conn, "weather_wind_channel") or "", "wind_speed")
     rad = _weather_channel(weather, db.get_setting(conn, "weather_radiation_channel") or "", "solar_radiation")
+
+    # Satu channel 0 itu wajar (mis. radiasi 0 malam hari). Tapi kalau SEMUA 0,
+    # kemungkinan device baru nyala / belum kirim data valid -> tolak.
+    if temp == 0 and rh == 0 and wind == 0 and rad == 0:
+        raise RuntimeError(
+            "Semua channel weather (temperature, RH, wind, radiation) bernilai 0 — "
+            "kemungkinan device baru nyala, data belum valid."
+        )
 
     soil_channels = [c.strip() for c in (db.get_setting(conn, "soil_channels") or "").split(",") if c.strip()]
     if not soil_channels:
