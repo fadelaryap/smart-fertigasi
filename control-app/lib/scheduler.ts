@@ -6,7 +6,7 @@
 // TRIGGERS watering; shutoff is driven by expected_off_at + watchdog.
 import cron, { type ScheduledTask } from "node-cron";
 import { getDb, logEvent, isSystemEnabled } from "./db";
-import { spawnBrain } from "./brain";
+import { spawnBrain, spawnDigest } from "./brain";
 
 interface ScheduleRow {
   id: number;
@@ -20,6 +20,7 @@ const g = globalThis as unknown as {
   __fertSchedulerTasks?: ScheduledTask[];
   __fertSchedulerStarted?: boolean;
   __fertMaintenanceStarted?: boolean;
+  __fertDigestStarted?: boolean;
 };
 
 export interface SchedulerStatus {
@@ -82,6 +83,25 @@ export function startScheduler(): void {
   g.__fertSchedulerStarted = true;
   const status = reloadSchedules();
   logEvent("info", "scheduler_started", { count: status.count });
+
+  // Daily "new day" digest to Telegram subscribers at local midnight (WIB):
+  // date, today's watering schedule, and last weather/soil reading. Informational
+  // only — sends regardless of whether the system is enabled.
+  if (!g.__fertDigestStarted) {
+    g.__fertDigestStarted = true;
+    cron.schedule(
+      "0 0 * * *",
+      () => {
+        logEvent("info", "digest_cron_fired", {});
+        try {
+          spawnDigest();
+        } catch (err) {
+          logEvent("error", "digest_cron_failed", { error: String(err) });
+        }
+      },
+      { timezone: "Asia/Jakarta" }
+    );
+  }
 
   // Start daily maintenance job
   if (!g.__fertMaintenanceStarted) {

@@ -49,3 +49,28 @@ export function spawnBrain(triggeredBy: "schedule" | "manual"): void {
 
   logEvent("info", "brain_spawned", { triggeredBy, pythonBin });
 }
+
+// Spawn `brain.py --digest` for the daily "new day" Telegram summary. Read-only:
+// no watering, no brain_running lock (so it never collides with a real run).
+export function spawnDigest(): void {
+  const repoRoot = path.resolve(process.cwd(), "..");
+  const brainDir = path.join(repoRoot, "brain");
+  const pythonBin = optionalEnv("PYTHON_BIN", "python");
+
+  const child = spawn(pythonBin, ["brain.py", "--digest"], {
+    cwd: brainDir,
+    env: process.env,
+  });
+
+  let out = "";
+  child.stdout.on("data", (d) => (out += d.toString()));
+  child.stderr.on("data", (d) => (out += d.toString()));
+  child.on("error", (err) => {
+    logEvent("error", "digest_spawn_failed", { error: String(err), pythonBin });
+  });
+  child.on("close", (code) => {
+    logEvent(code === 0 ? "info" : "error", "digest_exit", { code, output: out.slice(-1000) });
+  });
+
+  logEvent("info", "digest_spawned", { pythonBin });
+}

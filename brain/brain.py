@@ -3,8 +3,11 @@
 
 Usage:
   python brain.py [schedule|manual] [--dry]
+  python brain.py --digest      # kirim ringkasan 'hari baru' ke subscriber Telegram
 
   --dry         decide only: print the decision, do NOT POST / write DB / notify.
+  --digest      broadcast the daily "new day" summary (date, today's watering
+                schedule, last weather/soil reading) to Telegram, then exit.
 
 Flow:
   1. Build the fuzzy controller from the DB fuzzy_config row (rebuilt every run,
@@ -20,7 +23,9 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
+from datetime import datetime, timedelta, timezone
 
 import requests
 
@@ -141,6 +146,87 @@ def read_sensors(conn) -> dict:
 # ─────────────────────────────────────────────────────────────────────────────
 
 
+# ─── daily "new day" digest ──────────────────────────────────────────────────
+_WIB = timezone(timedelta(hours=7))
+_HARI = ["Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu", "Minggu"]  # weekday(): Mon=0
+_BULAN = ["", "Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli",
+          "Agustus", "September", "Oktober", "November", "Desember"]
+_CHANNEL_RE = re.compile(r"^s\d+$")
+
+
+def _sorted_channels(data: dict) -> list[str]:
+    """Channel keys (s0, s1, …) sorted numerically, not lexically (s2 before s10)."""
+    chans = [k for k in data if isinstance(k, str) and _CHANNEL_RE.match(k)]
+    return sorted(chans, key=lambda k: int(k[1:]))
+
+
+def _fmt_val(raw) -> str:
+    """Format a channel value for the digest. null -> 'null' (shown as-is)."""
+    if raw is None:
+        return "null"
+    try:
+        f = float(raw)
+        return str(int(f)) if f == int(f) else f"{f:.2f}"
+    except (TypeError, ValueError):
+        return str(raw)
+
+
+def build_digest(conn) -> str:
+    """Build the 'new day' summary: date, today's watering schedule, and the last
+    weather/soil reading. Sensor-fetch errors are caught per-device so the digest
+    always sends (never raises just because a channel is null)."""
+    now = datetime.now(_WIB)
+    tanggal = f"{_HARI[now.weekday()]}, {now.day} {_BULAN[now.month]} {now.year}"
+
+    lines = [
+        "",  # keep the divider off the info-emoji line that notify prepends
+        "====================================",
+        "🌅 HARI BARU",
+        tanggal,
+        "====================================",
+        "",
+        "🕐 Jadwal penyiraman hari ini:",
+    ]
+
+    rows = conn.execute(
+        "SELECT time FROM schedules WHERE enabled = 1 ORDER BY time"
+    ).fetchall()
+    if rows:
+        lines += [f"   • {r['time']}" for r in rows]
+    else:
+        lines.append("   (tidak ada jadwal aktif)")
+
+    base = (db.get_setting(conn, "agrihub_base_url") or "").rstrip("/")
+
+    # Cuaca: tampilkan semua channel 's' yang ada, KECUALI yang null.
+    lines += ["", "🌦️ Cuaca (pembacaan terakhir):"]
+    try:
+        weather = fetch_latest(base, db.get_setting(conn, "agrihub_weather_device_id") or "")
+        chans = [c for c in _sorted_channels(weather) if weather.get(c) is not None]
+        if chans:
+            lines += [f"   {c} = {_fmt_val(weather.get(c))}" for c in chans]
+        else:
+            lines.append("   (tidak ada channel berisi nilai)")
+    except Exception as exc:  # noqa: BLE001
+        lines.append(f"   (gagal ambil data: {exc})")
+
+    # Soil: tampilkan semua channel 's' yang ada; null ditulis apa adanya.
+    lines += ["", "🌱 Soil (pembacaan terakhir):"]
+    try:
+        soil = fetch_latest(base, db.get_setting(conn, "agrihub_soil_device_id") or "")
+        chans = _sorted_channels(soil)
+        if chans:
+            lines += [f"   {c} = {_fmt_val(soil.get(c))}" for c in chans]
+        else:
+            lines.append("   (tidak ada channel soil)")
+    except Exception as exc:  # noqa: BLE001
+        lines.append(f"   (gagal ambil data: {exc})")
+
+    lines += ["", "Fertigasi terjadwal & notifikasi error tetap berjalan seperti biasa."]
+    return "\n".join(lines)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Fertigation brain")
     parser.add_argument("triggered_by", nargs="?", default="manual",
@@ -149,11 +235,26 @@ def main() -> int:
                         help="decide only; no POST / DB write / notify")
     parser.add_argument("--test", action="store_true",
                         help="print sensor+fuzzy result as one JSON line (diagnostics UI)")
+    parser.add_argument("--digest", action="store_true",
+                        help="broadcast the daily 'new day' summary to Telegram, then exit")
     args = parser.parse_args()
 
     db.load_env()
     conn = db.connect()
     try:
+        # Daily "new day" digest: build summary, broadcast, exit. No watering.
+        if args.digest:
+            try:
+                msg = build_digest(conn)
+            except Exception as exc:  # noqa: BLE001
+                db.log_event(conn, "error", "digest_build_failed", {"error": str(exc)})
+                print(f"[brain] digest gagal dibuat: {exc}")
+                return 1
+            sent = notify.send_telegram("info", msg, conn=conn)
+            db.log_event(conn, "info", "digest_sent", {"broadcast": sent})
+            print(f"[brain] digest {'terkirim' if sent else 'log-only'}.")
+            return 0
+
         # 1) Rebuild fuzzy controller from DB config every run.
         cfg_row = db.get_fuzzy_config(conn)
         controller = FuzzyIrrigationController(FuzzyConfig(**cfg_row))
