@@ -9,6 +9,9 @@
 //    a `process.env.X || "secret"` fallback.
 //  - One connection is created lazily and reused (login/token is cached on the
 //    instance) instead of re-logging-in on every call.
+//  - If the cached token gets revoked (e.g. the same account logs in on the
+//    eWeLink phone app), calls are wrapped in withReauth(), which detects the
+//    auth error and re-logs-in once automatically (see AUTH_ERROR_CODES).
 import { requireEnv, optionalEnv } from "./env";
 import { logEvent, getDb, getSetting } from "./db";
 
@@ -41,6 +44,47 @@ function getConnection(): any {
 // an auth-looking failure).
 export function resetConnection(): void {
   connection = null;
+}
+
+// eWeLink error codes that mean "our cached session/token is no longer valid".
+// The usual trigger is the same account logging in elsewhere (e.g. the phone
+// app), which revokes our token. Note 401 is misleadingly mapped to "Wrong
+// account or password" by the library even though the credentials are fine — it
+// is really a dead token, not a bad password.
+const AUTH_ERROR_CODES = new Set([401, 403, 406]);
+
+// Returns the auth error code if `result` is one of the library's `{error}`
+// failure objects carrying an auth-related code, otherwise null.
+function authErrorCode(result: unknown): number | null {
+  if (!result || typeof result !== "object") return null;
+  const err = (result as { error?: unknown }).error;
+  const code = Number(err);
+  return err && AUTH_ERROR_CODES.has(code) ? code : null;
+}
+
+// Runs an eWeLink operation against the cached connection. If the call comes
+// back as an auth failure — either a returned `{error}` object (the library's
+// normal failure mode; it does NOT throw on API errors) or a thrown exception —
+// we drop the connection and retry ONCE. The retry runs against a fresh
+// connection whose token is empty, so makeRequest performs a real login again.
+// That transparently re-establishes our session after the phone app kicked us
+// off (and, per eWeLink's single-session rule, kicks the phone off in turn).
+async function withReauth<T>(op: (conn: any) => Promise<T>): Promise<T> {
+  let result: T;
+  try {
+    result = await op(getConnection());
+  } catch (err) {
+    logEvent("warn", "ewelink_reauth", { reason: "exception", error: String(err) });
+    resetConnection();
+    return op(getConnection());
+  }
+  const code = authErrorCode(result);
+  if (code !== null) {
+    logEvent("warn", "ewelink_reauth", { reason: "auth_error", code });
+    resetConnection();
+    result = await op(getConnection());
+  }
+  return result;
 }
 
 // --- Dry-run shadow state (persisted via event_log) --------------------------
@@ -82,7 +126,7 @@ export async function listDevices(): Promise<any[]> {
       dryRun: true,
     }));
   }
-  return getConnection().getDevices();
+  return withReauth((c) => c.getDevices());
 }
 
 export async function getPowerState(
@@ -92,7 +136,11 @@ export async function getPowerState(
   if (isDryRun()) {
     return dryRunState(deviceId, channel);
   }
-  const res = await getConnection().getDevicePowerState(deviceId, channel);
+  const res = await withReauth<any>((c) => c.getDevicePowerState(deviceId, channel));
+  if ((res as { error?: unknown })?.error) {
+    const r = res as { error: unknown; msg?: string };
+    throw new Error(`getDevicePowerState failed: ${r.error} ${r.msg ?? ""}`.trim());
+  }
   return res.state as PowerState;
 }
 
@@ -116,11 +164,13 @@ export async function setPowerState(
   }
 
   try {
-    const status = await getConnection().setDevicePowerState(
-      deviceId,
-      state,
-      channel
+    const status = await withReauth((c) =>
+      c.setDevicePowerState(deviceId, state, channel)
     );
+    if ((status as { error?: unknown })?.error) {
+      const s = status as { error: unknown; msg?: string };
+      throw new Error(`setDevicePowerState failed: ${s.error} ${s.msg ?? ""}`.trim());
+    }
     logEvent("info", "device_set", {
       device_id: deviceId,
       channel,
@@ -151,7 +201,12 @@ export async function testConnection(): Promise<{
   error?: string;
 }> {
   try {
-    const devices = await getConnection().getDevices();
+    const devices = await withReauth((c) => c.getDevices());
+    if ((devices as { error?: unknown })?.error) {
+      const d = devices as { error: unknown; msg?: string };
+      resetConnection();
+      return { ok: false, error: `${d.error} ${d.msg ?? ""}`.trim() };
+    }
     const list = Array.isArray(devices) ? devices : [];
     return {
       ok: true,
