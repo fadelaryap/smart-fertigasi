@@ -112,6 +112,65 @@ function dryRunState(deviceId: string, channel: number): PowerState {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+// --- Low-level requests with FRESH nonce/ts ----------------------------------
+// The bundled ewelink-api freezes `nonce` and `timestamp` at module load
+// (helpers/utilities.js), so every request it builds reuses the SAME nonce+ts
+// for the whole process lifetime. eWeLink treats two requests sharing a nonce+ts
+// as a replay/duplicate and rejects the second with an auth error (surfaced as
+// "401 Wrong account or password") — which is why two commands fired close
+// together fail, and why a long-lived process (with an ever-staler ts) sees
+// sporadic auth errors. We sidestep both by issuing our own requests with a
+// fresh nonce+ts each call, reusing only the library's authenticated
+// makeRequest (Bearer token + auto-login) and withReauth wrapper.
+const freshNonce = () => Math.random().toString(36).slice(2, 12);
+const freshTs = () => Math.floor(Date.now() / 1000);
+
+function throwIfError(res: unknown, what: string): void {
+  if (res && typeof res === "object" && (res as { error?: unknown }).error) {
+    const r = res as { error: unknown; msg?: string };
+    throw new Error(`${what} failed: ${r.error} ${r.msg ?? ""}`.trim());
+  }
+}
+
+// Read one device's full record (params.switches / params.switch) with a fresh
+// nonce+ts. Returns the raw device object or a library `{error}` object.
+async function fetchDevice(deviceId: string): Promise<any> {
+  return withReauth<any>((c) =>
+    c.makeRequest({
+      uri: `/user/device/${deviceId}`,
+      qs: {
+        deviceid: deviceId,
+        appid: c.APP_ID,
+        nonce: freshNonce(),
+        ts: freshTs(),
+        version: 8,
+      },
+    })
+  );
+}
+
+// Write a device's `params` (either {switches:[...]} for multi-gang or
+// {switch:"on"} for single) in ONE request with a fresh nonce+ts.
+async function writeParams(
+  deviceId: string,
+  params: Record<string, unknown>
+): Promise<any> {
+  return withReauth<any>((c) =>
+    c.makeRequest({
+      method: "post",
+      uri: "/user/device/status",
+      body: {
+        deviceid: deviceId,
+        params,
+        appid: c.APP_ID,
+        nonce: freshNonce(),
+        ts: freshTs(),
+        version: 8,
+      },
+    })
+  );
+}
+
 // --- Public API --------------------------------------------------------------
 
 export async function listDevices(): Promise<any[]> {
@@ -136,59 +195,115 @@ export async function getPowerState(
   if (isDryRun()) {
     return dryRunState(deviceId, channel);
   }
-  const res = await withReauth<any>((c) => c.getDevicePowerState(deviceId, channel));
-  if ((res as { error?: unknown })?.error) {
-    const r = res as { error: unknown; msg?: string };
-    throw new Error(`getDevicePowerState failed: ${r.error} ${r.msg ?? ""}`.trim());
+  const device = await fetchDevice(deviceId);
+  throwIfError(device, "getPowerState");
+  const switches = device?.params?.switches;
+  const state = Array.isArray(switches)
+    ? switches[channel - 1]?.switch
+    : device?.params?.switch;
+  if (state !== "on" && state !== "off") {
+    throw new Error(
+      `getPowerState: no switch state for ${deviceId} ch${channel}`
+    );
   }
-  return res.state as PowerState;
+  return state;
 }
 
+// Set one OR MORE channels of a SINGLE physical device in ONE request.
+// `desired` maps channel number (1-based) -> on/off.
+//
+// Why this exists: the two valves are two channels of the SAME device
+// (10023eaccf ch1 + ch2). Setting them with two separate calls (a) collides on
+// the frozen nonce/ts -> "401 wrong account or password", and (b) does a
+// read-modify-write of the whole `switches` array per call, so the second call
+// re-reads a still-stale cloud state and CLOBBERS the first channel back (that's
+// why OFF only ever landed on ch2). Writing all channels of the device in one
+// switches array — the native multi-gang format eWeLink itself uses — avoids
+// both. Single-channel devices (the pump) fall back to {switch:"on"}.
+export async function setDeviceChannels(
+  deviceId: string,
+  desired: Record<number, boolean>
+): Promise<void> {
+  const targets = Object.entries(desired).map(
+    ([ch, on]) => [Number(ch), (on ? "on" : "off") as PowerState] as const
+  );
+
+  if (isDryRun()) {
+    for (const [channel, state] of targets) {
+      // Each entry IS the persisted dry-run state (see dryRunState).
+      logEvent("info", "device_set", {
+        device_id: deviceId,
+        channel,
+        state,
+        dry_run: true,
+      });
+      console.log(`[ewelink:dry-run] set ${deviceId} ch${channel} -> ${state}`);
+    }
+    return;
+  }
+
+  try {
+    const device = await fetchDevice(deviceId);
+    throwIfError(device, "setDeviceChannels(read)");
+
+    const switches = device?.params?.switches;
+    let params: Record<string, unknown>;
+
+    if (Array.isArray(switches)) {
+      // Multi-gang: copy the full array, override only the requested channels.
+      const wanted = new Map(targets.map(([ch, st]) => [ch - 1, st]));
+      params = {
+        switches: switches.map((s: any, i: number) =>
+          wanted.has(i) ? { ...s, switch: wanted.get(i) } : s
+        ),
+      };
+    } else {
+      // Single-channel device: only channel 1 is meaningful.
+      if (!(targets.length === 1 && targets[0][0] === 1)) {
+        throw new Error(
+          `setDeviceChannels: ${deviceId} is single-channel; cannot set ${JSON.stringify(
+            desired
+          )}`
+        );
+      }
+      params = { switch: targets[0][1] };
+    }
+
+    const res = await writeParams(deviceId, params);
+    throwIfError(res, "setDeviceChannels");
+
+    for (const [channel, state] of targets) {
+      logEvent("info", "device_set", {
+        device_id: deviceId,
+        channel,
+        state,
+        dry_run: false,
+      });
+    }
+  } catch (err) {
+    for (const [channel, state] of targets) {
+      logEvent("error", "device_set_failed", {
+        device_id: deviceId,
+        channel,
+        state,
+        error: String(err),
+      });
+    }
+    // Clear the connection in case the token/login went stale.
+    resetConnection();
+    throw err;
+  }
+}
+
+// Single-channel convenience wrapper (used by the pump step and the manual
+// /api/device/on|off endpoints). Delegates to setDeviceChannels so it inherits
+// the fresh nonce/ts and the read-modify-write that preserves sibling channels.
 export async function setPowerState(
   deviceId: string,
   channel: number,
   on: boolean
 ): Promise<void> {
-  const state: PowerState = on ? "on" : "off";
-
-  if (isDryRun()) {
-    // The event_log entry below IS the persisted dry-run state (see dryRunState).
-    logEvent("info", "device_set", {
-      device_id: deviceId,
-      channel,
-      state,
-      dry_run: true,
-    });
-    console.log(`[ewelink:dry-run] set ${deviceId} ch${channel} -> ${state}`);
-    return;
-  }
-
-  try {
-    const status = await withReauth((c) =>
-      c.setDevicePowerState(deviceId, state, channel)
-    );
-    if ((status as { error?: unknown })?.error) {
-      const s = status as { error: unknown; msg?: string };
-      throw new Error(`setDevicePowerState failed: ${s.error} ${s.msg ?? ""}`.trim());
-    }
-    logEvent("info", "device_set", {
-      device_id: deviceId,
-      channel,
-      state,
-      dry_run: false,
-      status,
-    });
-  } catch (err) {
-    logEvent("error", "device_set_failed", {
-      device_id: deviceId,
-      channel,
-      state,
-      error: String(err),
-    });
-    // Clear the connection in case the token/login went stale.
-    resetConnection();
-    throw err;
-  }
+  return setDeviceChannels(deviceId, { [channel]: on });
 }
 
 // Connectivity test: performs a REAL getDevices (read-only, never toggles a

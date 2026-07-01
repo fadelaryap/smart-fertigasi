@@ -12,7 +12,7 @@
 //    watchdog enforces the absolute safety cutoff independently.
 //  - Every ON/OFF is verified (with retry). Mismatch -> Telegram + event_log.
 import { getDb, getSetting, logEvent, isSystemEnabled } from "./db";
-import { setPowerState, verifyState, isDryRun } from "./ewelink";
+import { setDeviceChannels, verifyState, isDryRun, type PowerState } from "./ewelink";
 import { sendTelegram } from "./telegram";
 import { nowIso, isoPlusMinutes, toWIB } from "./time";
 
@@ -45,6 +45,64 @@ export interface RunParams {
 function num(setting: string | null, fallback: number): number {
   const n = Number(setting);
   return Number.isFinite(n) ? n : fallback;
+}
+
+// Switch a set of channels on/off. Channels that share a physical device are
+// sent in a SINGLE multi-channel request (e.g. both valve channels of
+// 10023eaccf at once) — this avoids eWeLink's frozen-nonce "401 wrong
+// account/password" on close-together commands AND the read-modify-write
+// clobber that used to leave one channel on. Distinct devices go sequentially.
+async function setDevicesGrouped(rows: DeviceRow[], on: boolean): Promise<void> {
+  const byDevice = new Map<string, DeviceRow[]>();
+  for (const r of rows) {
+    const arr = byDevice.get(r.device_id) ?? [];
+    arr.push(r);
+    byDevice.set(r.device_id, arr);
+  }
+  for (const [deviceId, chans] of byDevice) {
+    const desired: Record<number, boolean> = {};
+    for (const c of chans) desired[c.channel] = on;
+    await setDeviceChannels(deviceId, desired);
+  }
+}
+
+// Drive a set of channels to `on`/`off` and CONFIRM it, retrying the whole
+// set+verify up to `attempts` times. Returns the per-row verified flags plus an
+// `ok` that is true only when every row reached the expected state. Callers
+// decide what an `ok:false` means (abort ON, or refuse to close valves on OFF).
+async function ensureDevices(
+  rows: DeviceRow[],
+  on: boolean,
+  attempts = 3
+): Promise<{ ok: boolean; verified: boolean[] }> {
+  const expected: PowerState = on ? "on" : "off";
+  let verified: boolean[] = rows.map(() => false);
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    try {
+      await setDevicesGrouped(rows, on);
+    } catch (err) {
+      logEvent("warn", "device_ensure_set_failed", {
+        attempt,
+        expected,
+        error: String(err),
+      });
+    }
+    verified = await Promise.all(
+      rows.map((r) => verifyState(r.device_id, r.channel, expected))
+    );
+    if (verified.every(Boolean)) return { ok: true, verified };
+    logEvent("warn", "device_ensure_retry", {
+      attempt,
+      expected,
+      results: rows.map((r, i) => ({
+        device_id: r.device_id,
+        channel: r.channel,
+        ok: verified[i],
+      })),
+    });
+    if (attempt < attempts) await sleep(1500);
+  }
+  return { ok: false, verified };
 }
 
 // In-process guard so a manual /api/stop and the watchdog's /api/stop (both funnel
@@ -108,30 +166,63 @@ export async function runIrrigation(p: RunParams) {
     expected_off_at: expectedOff,
   });
 
-  // // 1) Open BOTH valves together.
-  // await Promise.all(valves.map((v) => setPowerState(v.device_id, v.channel, true)));
-
-  for (let i = 0; i < valves.length; i++) {
-    const v = valves[i];
-  
-    await setPowerState(v.device_id, v.channel, true);
-  
-    if (i < valves.length - 1) {
-      await sleep(3000);
-    }
+  // 1) Open all valves and CONFIRM both are on (set+verify with retry).
+  //    If they can't be confirmed, ABORT: never start the pump, close the valves
+  //    again, and mark the run failed.
+  const valveResult = await ensureDevices(valves, true, 3);
+  const valveVerified = valveResult.verified;
+  if (!valveResult.ok) {
+    logEvent("error", "run_abort_valve_on", {
+      run_id: runId,
+      verified: valves.map((v, i) => ({
+        device_id: v.device_id,
+        channel: v.channel,
+        ok: valveVerified[i],
+      })),
+    });
+    // Safety close (best effort, with retry). Pump is NOT touched — still off.
+    const closed = await ensureDevices(valves, false, 3);
+    db.prepare(
+      "UPDATE irrigation_runs SET status='failed', finished_at=? WHERE id=?"
+    ).run(nowIso(), runId);
+    await sendTelegram(
+      "warn",
+      `Run #${runId} DIBATALKAN — valve gagal ON. Pompa tidak dinyalakan; valve ${
+        closed.ok ? "sudah ditutup kembali" : "GAGAL ditutup — CEK MANUAL!"
+      }.`
+    );
+    throw new Error(`Run #${runId} aborted: valves failed to confirm ON`);
   }
-  const valveVerified = await Promise.all(
-    valves.map((v) => verifyState(v.device_id, v.channel, "on"))
-  );
 
-  // 2) Wait the configured pump delay (explicit 7s — NOT the watering duration).
+  // 2) Wait the configured pump delay (valve travel time — NOT the watering duration).
   await sleep(pumpDelayOn * 1000);
 
-  // 3) Start pump(s).
-  await Promise.all(pumps.map((p2) => setPowerState(p2.device_id, p2.channel, true)));
-  const pumpVerified = await Promise.all(
-    pumps.map((p2) => verifyState(p2.device_id, p2.channel, "on"))
-  );
+  // 3) Start pump(s) and CONFIRM on (set+verify with retry). If the pump can't
+  //    be confirmed, ABORT: turn the pump off, close the valves, mark failed.
+  const pumpResult = await ensureDevices(pumps, true, 3);
+  const pumpVerified = pumpResult.verified;
+  if (!pumpResult.ok) {
+    logEvent("error", "run_abort_pump_on", {
+      run_id: runId,
+      verified: pumps.map((p2, i) => ({
+        device_id: p2.device_id,
+        channel: p2.channel,
+        ok: pumpVerified[i],
+      })),
+    });
+    await ensureDevices(pumps, false, 3); // pump off first (deadhead-safe order)
+    const closed = await ensureDevices(valves, false, 3);
+    db.prepare(
+      "UPDATE irrigation_runs SET status='failed', finished_at=? WHERE id=?"
+    ).run(nowIso(), runId);
+    await sendTelegram(
+      "warn",
+      `Run #${runId} DIBATALKAN — pompa gagal ON. Pompa dimatikan; valve ${
+        closed.ok ? "sudah ditutup" : "GAGAL ditutup — CEK MANUAL!"
+      }.`
+    );
+    throw new Error(`Run #${runId} aborted: pump failed to confirm ON`);
+  }
 
   // 4) Record channel_state for every active channel — the watchdog's shutoff source.
   const insCs = db.prepare(
@@ -146,12 +237,8 @@ export async function runIrrigation(p: RunParams) {
     insCs.run(runId, p2.device_id, p2.channel, "pump", startedAt, expectedOff, pumpVerified[i] ? 1 : 0, nowIso())
   );
 
-  const allVerified = [...valveVerified, ...pumpVerified].every(Boolean);
-  if (!allVerified) {
-    logEvent("warn", "run_verify_mismatch", { run_id: runId, valveVerified, pumpVerified });
-    await sendTelegram("warn", `Verifikasi ON gagal di run #${runId} — periksa device.`);
-  }
-
+  // Reaching here means every valve AND pump was confirmed on (else we aborted
+  // above), so the run is fully verified.
   const et0s = p.et0 != null ? p.et0.toFixed(3) : "-";
   const soils = p.soil_avg != null ? p.soil_avg.toFixed(1) : "-";
   await sendTelegram(
@@ -165,7 +252,7 @@ export async function runIrrigation(p: RunParams) {
     clamped_to_safety: clamped,
     started_at: startedAt,
     expected_off_at: expectedOff,
-    verified: allVerified,
+    verified: true,
     dryRun: isDryRun(),
   };
 }
@@ -195,51 +282,77 @@ export async function stopIrrigation(runId: number) {
     const pumps = channels.filter((c) => c.role === "pump");
     const pumpDelayOff = num(getSetting("pump_delay_off_seconds"), 0);
 
-    // 1) Pump(s) off FIRST.
-    await Promise.all(pumps.map((p) => setPowerState(p.device_id, p.channel, false)));
-    const pumpV = await Promise.all(
-      pumps.map((p) => verifyState(p.device_id, p.channel, "off"))
+    const upd = db.prepare(
+      "UPDATE channel_state SET state=?, verified=?, last_checked_at=? WHERE id=?"
     );
+
+    // 1) Pump(s) off FIRST, and CONFIRM off (set+verify with retry). The valves
+    //    must NOT be closed until the pump is confirmed off — closing them
+    //    against a running pump would deadhead it. If the pump can't be
+    //    confirmed off, leave the valves open, alarm hard, and keep the run
+    //    'running' so the watchdog keeps retrying the stop.
+    const pumpResult = await ensureDevices(pumps, false, 3);
+    const pumpV = pumpResult.verified;
+    pumps.forEach((p, i) =>
+      upd.run(pumpV[i] ? "off" : "on", pumpV[i] ? 1 : 0, nowIso(), p.id)
+    );
+    if (!pumpResult.ok) {
+      logEvent("error", "stop_pump_off_failed", {
+        run_id: runId,
+        verified: pumps.map((p, i) => ({
+          device_id: p.device_id,
+          channel: p.channel,
+          ok: pumpV[i],
+        })),
+      });
+      await sendTelegram(
+        "warn",
+        `Run #${runId}: pompa GAGAL dimatikan setelah retry — valve TIDAK ditutup (risiko deadhead). CEK MANUAL SEGERA! Watchdog akan terus mencoba.`
+      );
+      throw new Error(
+        `Run #${runId}: pump failed to confirm OFF; valves left open`
+      );
+    }
 
     // 2) Optional configured delay.
     if (pumpDelayOff > 0) await sleep(pumpDelayOff * 1000);
 
-    // 3) Valves off.
-    // await Promise.all(valves.map((v) => setPowerState(v.device_id, v.channel, false)));
-    for (let i = 0; i < valves.length; i++) {
-      const v = valves[i];
-    
-      await setPowerState(v.device_id, v.channel, false);
-    
-      if (i < valves.length - 1) {
-        await sleep(3000);
-      }
-    }
-    const valveV = await Promise.all(
-      valves.map((v) => verifyState(v.device_id, v.channel, "off"))
+    // 3) Valves off (channels on the same device switch together in one call),
+    //    confirmed with retry.
+    const valveResult = await ensureDevices(valves, false, 3);
+    const valveV = valveResult.verified;
+    valves.forEach((v, i) =>
+      upd.run(valveV[i] ? "off" : "on", valveV[i] ? 1 : 0, nowIso(), v.id)
     );
 
-    const upd = db.prepare(
-      "UPDATE channel_state SET state='off', verified=?, last_checked_at=? WHERE id=?"
-    );
-    pumps.forEach((p, i) => upd.run(pumpV[i] ? 1 : 0, nowIso(), p.id));
-    valves.forEach((v, i) => upd.run(valveV[i] ? 1 : 0, nowIso(), v.id));
+    // If any valve couldn't be confirmed off, keep the run 'running' (do NOT mark
+    // completed) so the watchdog keeps retrying the stop. The pump is already
+    // confirmed off here, so re-closing valves on the next attempt is safe.
+    if (!valveResult.ok) {
+      logEvent("warn", "stop_valve_off_failed", {
+        run_id: runId,
+        verified: valves.map((v, i) => ({
+          device_id: v.device_id,
+          channel: v.channel,
+          ok: valveV[i],
+        })),
+      });
+      await sendTelegram(
+        "warn",
+        `Run #${runId}: pompa sudah mati tapi valve GAGAL ditutup setelah retry — periksa device. Watchdog akan terus mencoba.`
+      );
+      throw new Error(`Run #${runId}: valves failed to confirm OFF`);
+    }
 
     db.prepare("UPDATE irrigation_runs SET status='completed', finished_at=? WHERE id=?").run(
       nowIso(),
       runId
     );
 
-    const allV = [...pumpV, ...valveV].every(Boolean);
-    if (!allV) {
-      logEvent("warn", "stop_verify_mismatch", { run_id: runId, pumpV, valveV });
-      await sendTelegram("warn", `Verifikasi OFF gagal di run #${runId} — periksa device.`);
-    }
-
     const actualMin = run.started_at
       ? (Date.now() - Date.parse(run.started_at)) / 60_000
       : null;
-    logEvent("info", "run_stop", { run_id: runId, verified: allV, actual_minutes: actualMin });
+    logEvent("info", "run_stop", { run_id: runId, verified: true, actual_minutes: actualMin });
     await sendTelegram(
       "info",
       `Penyiraman selesai (run #${runId})${
@@ -247,7 +360,7 @@ export async function stopIrrigation(runId: number) {
       }.`
     );
 
-    return { run_id: runId, status: "completed" as const, verified: allV, dryRun: isDryRun() };
+    return { run_id: runId, status: "completed" as const, verified: true, dryRun: isDryRun() };
   } finally {
     stopping.delete(runId);
   }
